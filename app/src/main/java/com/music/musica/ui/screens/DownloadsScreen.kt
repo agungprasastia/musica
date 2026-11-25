@@ -1,0 +1,166 @@
+package com.music.musica.ui.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import com.music.musica.R
+import com.music.musica.core.model.DownloadState
+import com.music.musica.core.model.Song
+import com.music.musica.data.download.DownloadedTrackItem
+import com.music.musica.ui.components.ArtworkImage
+import com.music.musica.ui.components.FrostedCircleButton
+import com.music.musica.ui.components.LocalLiquidGlassEnabled
+import com.music.musica.ui.components.TopFadeBlur
+import com.music.musica.ui.theme.MusicaAccentRed
+import dev.chrisbanes.haze.HazeState
+
+@Composable
+fun DownloadsScreen(
+    downloads: List<DownloadedTrackItem>,
+    hazeState: HazeState,
+    frostedGlassEnabled: Boolean = LocalLiquidGlassEnabled.current,
+    bottomPadding: Dp,
+    onBack: () -> Unit,
+    onPlayTracks: (List<Song>, Int) -> Unit,
+    onRemoveDownload: (String) -> Unit,
+) {
+    val completedSongs = downloads.filter { it.state == DownloadState.COMPLETED }.map { it.song }
+
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding(),
+        ) {
+            // Consistent Liquid Glass Top Header (replaces stock Material 3 TopAppBar)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                FrostedCircleButton(
+                    icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = stringResource(R.string.action_back),
+                    hazeState = hazeState,
+                    frostedGlassEnabled = frostedGlassEnabled,
+                    onClick = onBack,
+                )
+                Text(
+                    text = stringResource(R.string.downloads_title),
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (completedSongs.isNotEmpty()) {
+                    FrostedCircleButton(
+                        icon = Icons.Rounded.PlayArrow,
+                        contentDescription = stringResource(R.string.action_play),
+                        hazeState = hazeState,
+                        frostedGlassEnabled = frostedGlassEnabled,
+                        tint = MusicaAccentRed,
+                        onClick = { onPlayTracks(completedSongs, 0) },
+                    )
+                }
+            }
+
+            if (downloads.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(stringResource(R.string.downloads_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = bottomPadding + 22.dp),
+                ) {
+                    itemsIndexed(downloads, key = { _, d -> d.song.videoId }) { _, item ->
+                        val completedIndex = completedSongs.indexOfFirst { it.videoId == item.song.videoId }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = completedIndex >= 0) {
+                                    onPlayTracks(completedSongs, completedIndex)
+                                }
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            ArtworkImage(url = item.song.thumbnailUrl, contentDescription = item.song.title, size = 52.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(item.song.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    text = when (item.state) {
+                                        DownloadState.QUEUED -> stringResource(R.string.downloads_status_queued)
+                                        DownloadState.DOWNLOADING -> stringResource(R.string.downloads_status_downloading, item.progressPercent)
+                                        DownloadState.COMPLETED -> "${item.song.artistText} • ${formatMegabytes(item.fileSizeBytes)}"
+                                        DownloadState.FAILED -> stringResource(R.string.downloads_status_failed)
+                                        DownloadState.NOT_DOWNLOADED -> ""
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (item.state == DownloadState.FAILED) MusicaAccentRed else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                if (item.state == DownloadState.DOWNLOADING) {
+                                    Spacer(Modifier.height(4.dp))
+                                    LinearProgressIndicator(
+                                        progress = { item.progressPercent / 100f },
+                                        color = MusicaAccentRed,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                }
+                            }
+                            IconButton(onClick = { onRemoveDownload(item.song.videoId) }) {
+                                Icon(Icons.Rounded.DeleteOutline, contentDescription = stringResource(R.string.action_delete))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        TopFadeBlur(
+            hazeState = hazeState,
+            frostedGlassEnabled = frostedGlassEnabled,
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
+    }
+}
+
+private fun formatMegabytes(bytes: Long): String {
+    if (bytes <= 0L) return "Offline"
+    val mb = bytes / (1024.0 * 1024.0)
+    return "%.1f MB".format(mb)
+}
