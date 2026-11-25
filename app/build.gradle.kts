@@ -8,7 +8,9 @@ plugins {
 android {
     namespace = "com.music.musica"
     compileSdk {
-        version = release(37)
+        version = release(37) {
+            minorApiLevel = 1
+        }
     }
 
     defaultConfig {
