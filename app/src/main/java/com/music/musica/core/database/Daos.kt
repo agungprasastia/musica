@@ -1,0 +1,177 @@
+package com.music.musica.core.database
+
+import androidx.room.Dao
+import androidx.room.Embedded
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Relation
+import androidx.room.Transaction
+import androidx.room.Upsert
+import kotlinx.coroutines.flow.Flow
+
+data class PlayHistoryWithSong(
+    @Embedded val history: PlayHistoryEntity,
+    @Relation(parentColumn = "videoId", entityColumn = "videoId")
+    val song: SongEntity?,
+)
+
+data class DownloadWithSong(
+    @Embedded val download: DownloadEntity,
+    @Relation(parentColumn = "videoId", entityColumn = "videoId")
+    val song: SongEntity?,
+)
+
+data class PlaylistWithCount(
+    @Embedded val playlist: PlaylistEntity,
+    val songCount: Int,
+)
+
+@Dao
+interface SongDao {
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIgnore(song: SongEntity): Long
+
+    @Query(
+        """
+        UPDATE songs
+        SET title = :title, artistsJson = :artistsJson, albumName = :albumName,
+            albumBrowseId = :albumBrowseId, durationMs = :durationMs,
+            thumbnailUrl = COALESCE(:thumbnailUrl, thumbnailUrl), isExplicit = :isExplicit
+        WHERE videoId = :videoId
+        """,
+    )
+    suspend fun updateMetadata(
+        videoId: String,
+        title: String,
+        artistsJson: String,
+        albumName: String?,
+        albumBrowseId: String?,
+        durationMs: Long,
+        thumbnailUrl: String?,
+        isExplicit: Boolean,
+    )
+
+    @Query("SELECT * FROM songs WHERE videoId = :videoId LIMIT 1")
+    suspend fun getById(videoId: String): SongEntity?
+
+    @Query("UPDATE songs SET isLiked = :liked, likedAtMs = :likedAtMs WHERE videoId = :videoId")
+    suspend fun setLiked(videoId: String, liked: Boolean, likedAtMs: Long)
+
+    @Query("SELECT * FROM songs WHERE isLiked = 1 ORDER BY likedAtMs DESC")
+    fun observeLikedSongs(): Flow<List<SongEntity>>
+
+    @Query("SELECT videoId FROM songs WHERE isLiked = 1")
+    fun observeLikedIds(): Flow<List<String>>
+}
+
+@Dao
+interface PlaylistDao {
+    @Upsert
+    suspend fun upsertPlaylist(playlist: PlaylistEntity)
+
+    @Query("DELETE FROM playlists WHERE playlistId = :playlistId")
+    suspend fun deletePlaylist(playlistId: String)
+
+    @Query(
+        """
+        SELECT p.*, COUNT(ps.videoId) AS songCount
+        FROM playlists p
+        LEFT JOIN playlist_songs ps ON p.playlistId = ps.playlistId
+        GROUP BY p.playlistId
+        ORDER BY p.updatedAtMs DESC
+        """,
+    )
+    fun observePlaylistsWithCounts(): Flow<List<PlaylistWithCount>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun addSongToPlaylist(ref: PlaylistSongCrossRef)
+
+    @Query("DELETE FROM playlist_songs WHERE playlistId = :playlistId AND videoId = :videoId")
+    suspend fun removeSongFromPlaylist(playlistId: String, videoId: String)
+
+    @Query("SELECT COALESCE(MAX(position), -1) + 1 FROM playlist_songs WHERE playlistId = :playlistId")
+    suspend fun nextPosition(playlistId: String): Int
+
+    @Query(
+        """
+        SELECT s.* FROM songs s
+        INNER JOIN playlist_songs ps ON s.videoId = ps.videoId
+        WHERE ps.playlistId = :playlistId
+        ORDER BY ps.position ASC
+        """,
+    )
+    suspend fun getSongsInPlaylist(playlistId: String): List<SongEntity>
+
+    @Query("SELECT * FROM playlists WHERE playlistId = :playlistId LIMIT 1")
+    suspend fun getPlaylist(playlistId: String): PlaylistEntity?
+}
+
+@Dao
+interface HistoryDao {
+    @Insert
+    suspend fun insert(entry: PlayHistoryEntity)
+
+    @Transaction
+    @Query("SELECT * FROM play_history ORDER BY playedAtMs DESC LIMIT :limit")
+    fun observeRecentHistory(limit: Int = 200): Flow<List<PlayHistoryWithSong>>
+
+    @Transaction
+    @Query("SELECT * FROM play_history ORDER BY playedAtMs DESC")
+    fun observeAllHistory(): Flow<List<PlayHistoryWithSong>>
+
+    @Query("DELETE FROM play_history")
+    suspend fun clearAll()
+}
+
+@Dao
+interface SearchHistoryDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entry: SearchHistoryEntity)
+
+    @Query("SELECT query FROM search_history ORDER BY searchedAtMs DESC LIMIT 20")
+    fun observeRecentQueries(): Flow<List<String>>
+
+    @Query("DELETE FROM search_history WHERE query = :query")
+    suspend fun delete(query: String)
+
+    @Query("DELETE FROM search_history")
+    suspend fun clearAll()
+}
+
+@Dao
+interface LyricsCacheDao {
+    @Query("SELECT * FROM cached_lyrics WHERE videoId = :videoId LIMIT 1")
+    suspend fun get(videoId: String): CachedLyricsEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entity: CachedLyricsEntity)
+
+    @Query("UPDATE cached_lyrics SET offsetMs = :offsetMs WHERE videoId = :videoId")
+    suspend fun updateOffset(videoId: String, offsetMs: Long)
+}
+
+@Dao
+interface DownloadDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entity: DownloadEntity)
+
+    @Query("DELETE FROM downloads WHERE videoId = :videoId")
+    suspend fun delete(videoId: String)
+
+    @Transaction
+    @Query("SELECT * FROM downloads ORDER BY updatedAtMs DESC")
+    fun observeDownloads(): Flow<List<DownloadWithSong>>
+
+    @Query("SELECT videoId FROM downloads WHERE status = 'COMPLETED'")
+    fun observeCompletedIds(): Flow<List<String>>
+
+    @Query("SELECT videoId FROM downloads WHERE status = 'COMPLETED'")
+    suspend fun getCompletedIds(): List<String>
+
+    @Query("SELECT videoId FROM downloads WHERE status IN ('QUEUED', 'DOWNLOADING')")
+    suspend fun getIncompleteIds(): List<String>
+
+    @Query("UPDATE downloads SET status = 'FAILED', progressPercent = 0 WHERE status IN ('QUEUED', 'DOWNLOADING')")
+    suspend fun markIncompleteAsFailed()
+}
