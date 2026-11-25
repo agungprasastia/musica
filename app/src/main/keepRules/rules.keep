@@ -1,0 +1,42 @@
+# Musica R8 / ProGuard Keep Rules
+
+# Keep serialization models and generated serializers
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.AnnotationsKt
+-keepclassmembers class kotlinx.serialization.json.** {
+    *** Companion;
+}
+-keepclasseswithmembers class kotlinx.serialization.json.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+-keep,includedescriptorclasses class com.music.musica.**$$serializer { *; }
+-keepclassmembers class com.music.musica.** {
+    *** Companion;
+}
+
+# Keep Ktor / OkHttp / Coroutines reflection hooks
+-dontwarn io.ktor.**
+-dontwarn org.slf4j.**
+-dontwarn okhttp3.**
+-dontwarn okio.**
+
+# Keep InnerTubeX, NewPipeExtractor, Rhino, QuickJS JNI & reflection
+-keep class com.metrolist.innertubex.** { *; }
+-dontwarn com.metrolist.innertubex.**
+-keep class org.schabi.newpipe.extractor.** { *; }
+-dontwarn org.schabi.newpipe.extractor.**
+-keep class org.mozilla.javascript.** { *; }
+-dontwarn org.mozilla.javascript.**
+-keep class com.dokar.quickjs.** { *; }
+-dontwarn com.dokar.quickjs.**
+-keep class org.jsoup.** { *; }
+-dontwarn org.jsoup.**
+
+# Keep Media3 & Room
+-keep class androidx.media3.** { *; }
+-keep class com.music.musica.core.database.** { *; }
+
+# Keep JS WebView interface
+-keepclassmembers class com.music.musica.data.stream.PoTokenWebViewProvider$* {
+    @android.webkit.JavascriptInterface <methods>;
+}
