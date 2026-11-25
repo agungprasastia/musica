@@ -1,0 +1,24 @@
+name: Feature Request
+description: Suggest an improvement or new feature for Musica
+title: "[Feature]: "
+labels: [ "enhancement" ]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Feature summary
+      description: Clearly describe the feature or improvement you would like to see.
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Why is this useful?
+      description: Explain the problem this solves or how it improves your listening experience.
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Additional context or mockups (optional)
+      description: Add any screenshots, references, or implementation ideas.

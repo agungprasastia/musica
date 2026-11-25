@@ -8,6 +8,7 @@
     <img src="https://img.shields.io/badge/Kotlin-2.4-7F52FF?style=flat-square&logo=kotlin&logoColor=white" alt="Kotlin" />
     <img src="https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white" alt="Jetpack Compose" />
     <img src="https://img.shields.io/badge/Media3-ExoPlayer-FF6F00?style=flat-square" alt="Media3 ExoPlayer" />
+    <img src="https://img.shields.io/badge/License-GPLv3-blue?style=flat-square" alt="GPL-3.0 License" />
   </p>
 </div>
 
@@ -68,6 +69,12 @@ app/src/main/java/com/music/musica/
 # Build R8-minified Release APK
 ./gradlew :app:assembleRelease
 ```
+
+---
+
+## License
+
+Musica is free software licensed under the **GNU General Public License v3.0 (GPL-3.0)** — see the [LICENSE](LICENSE) file for full details.
 
 ---
 
