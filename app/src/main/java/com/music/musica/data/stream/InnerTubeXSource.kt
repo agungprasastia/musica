@@ -92,7 +92,7 @@ class InnerTubeXSource(
         val stream = extractor.extract(
             videoId = videoId,
             hints = ContentHints()
-                .withStreamCapabilities(allowHls = false, allowSabr = false, allowBoundedRange = true),
+                .withStreamCapabilities(allowHls = true, allowSabr = false, allowBoundedRange = true),
             excludedClients = emptySet(),
             audioQuality = quality,
             clientPlaybackNonce = generateClientPlaybackNonce(),

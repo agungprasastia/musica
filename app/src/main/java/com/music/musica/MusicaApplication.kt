@@ -40,6 +40,8 @@ import com.music.musica.data.stream.NewPipeFallbackSource
 import com.music.musica.data.stream.PoTokenWebViewProvider
 import com.music.musica.data.stream.StreamResolver
 import com.music.musica.playback.AutoplayController
+import com.music.musica.playback.LastPlayedStore
+import com.music.musica.playback.MusicaPlaybackService
 import com.music.musica.playback.PlayerController
 import com.music.musica.playback.SleepTimerManager
 import kotlinx.coroutines.CoroutineScope
@@ -131,6 +133,7 @@ class AppContainer(context: Context) {
                 else -> s.wifiQuality.maxKbps
             }
         },
+        probeOnFirstResolve = false,
     )
 
     val downloadRepository: DownloadRepository = DownloadRepository(
@@ -183,6 +186,7 @@ class AppContainer(context: Context) {
     )
 
     val autoplayController: AutoplayController = AutoplayController(ytMusicRepository)
+    val lastPlayedStore: LastPlayedStore = LastPlayedStore(appContext)
     val playerController: PlayerController = PlayerController(appContext)
 
     val sleepTimerManager: SleepTimerManager = SleepTimerManager(
@@ -200,6 +204,11 @@ class AppContainer(context: Context) {
 
     init {
         innerTubeXSource.prewarmAsync()
+        appScope.launch {
+            lastPlayedStore.load()?.let { snapshot ->
+                MusicaPlaybackService.seedRestoredSnapshot(snapshot)
+            }
+        }
         appScope.launch {
             settingsStore.settings
                 .map { it.audioCacheLimitMb }

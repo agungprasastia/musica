@@ -71,6 +71,11 @@ jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
 # YouTube Extraction
 innertubex-android = { group = "com.github.MetrolistGroup.innertubex", name = "innertubex-android", version.ref = "innertubex" }
 newpipe-extractor = { group = "com.github.TeamNewPipe", name = "NewPipeExtractor", version.ref = "newpipeExtractor" }
+newpipe-nanojson = { group = "com.github.TeamNewPipe", name = "nanojson", version = "e9d656ddb49a412a5a0a5d5ef20ca7ef09549996" }
+jsr305 = { group = "com.google.code.findbugs", name = "jsr305", version = "3.0.2" }
+protobuf-javalite = { group = "com.google.protobuf", name = "protobuf-javalite", version = "4.35.0" }
+rhino = { group = "org.mozilla", name = "rhino", version = "1.8.1" }
+rhino-engine = { group = "org.mozilla", name = "rhino-engine", version = "1.8.1" }
 quickjs-android = { group = "io.github.dokar3", name = "quickjs-kt-android", version.ref = "quickjs" }
 
 # Images & Frosted Glass

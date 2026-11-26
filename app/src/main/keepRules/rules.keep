@@ -36,7 +36,10 @@
 -keep class androidx.media3.** { *; }
 -keep class com.music.musica.core.database.** { *; }
 
-# Keep JS WebView interface
+# Keep JS WebView interface (BotGuard PoToken minter)
+-keepclassmembers class com.music.musica.data.stream.PoTokenWebViewProvider {
+    @android.webkit.JavascriptInterface <methods>;
+}
 -keepclassmembers class com.music.musica.data.stream.PoTokenWebViewProvider$* {
     @android.webkit.JavascriptInterface <methods>;
 }
