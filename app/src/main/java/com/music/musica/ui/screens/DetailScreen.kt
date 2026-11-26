@@ -118,7 +118,7 @@ fun DetailScreen(
     onBack: () -> Unit,
     onRetry: () -> Unit,
     onPlayTracks: (List<Song>, Int, Boolean) -> Unit,
-    onDownloadAll: (List<Song>) -> Unit,
+    onDownloadAll: (List<Song>, String?, String?) -> Unit,
     onToggleSubscribeArtist: (String, String, String?) -> Unit = { _, _, _ -> },
     onItemClick: (ShelfItem) -> Unit,
     onSongMore: (Song) -> Unit,
@@ -259,7 +259,9 @@ fun DetailScreen(
                                         if (detail.tracks.isNotEmpty()) onPlayTracks(detail.tracks, 0, true)
                                     },
                                     onDownloadAll = {
-                                        if (detail.tracks.isNotEmpty()) onDownloadAll(detail.tracks)
+                                        if (detail.tracks.isNotEmpty()) {
+                                            onDownloadAll(detail.tracks, detail.browseId, detail.title)
+                                        }
                                     },
                                 )
                             }

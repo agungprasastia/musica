@@ -306,6 +306,7 @@ internal fun MusicaAppRoot(
 
                 visibleRoute == AppRoute.Downloads -> DownloadsOverlayHost(
                     vm = vm,
+                    settings = settings,
                     hazeState = hazeState,
                     frostedGlassEnabled = settings.frostedGlassEnabled,
                     bottomPadding = chromeBottomPadding,
@@ -327,8 +328,8 @@ internal fun MusicaAppRoot(
                         onBack = { navigator.pop() },
                         onRetry = vm::retryTopDetail,
                         onPlayTracks = vm::playTracks,
-                        onDownloadAll = { songs ->
-                            vm.downloadAll(songs)
+                        onDownloadAll = { songs, collectionId, collectionTitle ->
+                            vm.downloadAll(songs, collectionId, collectionTitle)
                             Toast.makeText(context, resources.getString(R.string.toast_download_started), Toast.LENGTH_SHORT).show()
                         },
                         onToggleSubscribeArtist = vm::toggleArtistSubscribed,
@@ -850,6 +851,8 @@ private fun SettingsOverlayHost(
         onOpenEqualizer = { onOpenEqualizer(audioSessionId) },
         onSetWifiQuality = vm::setWifiQuality,
         onSetCellularQuality = vm::setCellularQuality,
+        onSetDownloadQuality = vm::setDownloadQuality,
+        onSetWifiOnlyDownloads = vm::setWifiOnlyDownloads,
         onSetTheme = vm::setThemeMode,
         onSetPlayerTheme = vm::setPlayerTheme,
         onSetFullBleedCover = vm::setFullBleedCoverArt,
@@ -935,19 +938,25 @@ private fun ReplayOverlayHost(
 @Composable
 private fun DownloadsOverlayHost(
     vm: MainViewModel,
+    settings: UserSettings,
     hazeState: HazeState,
     frostedGlassEnabled: Boolean,
     bottomPadding: Dp,
     onBack: () -> Unit,
 ) {
     val downloads by vm.downloads.collectAsStateWithLifecycle()
+    val networkType by vm.networkType.collectAsStateWithLifecycle()
     DownloadsScreen(
         downloads = downloads,
+        wifiOnlyDownloads = settings.wifiOnlyDownloads,
+        networkType = networkType,
         hazeState = hazeState,
         frostedGlassEnabled = frostedGlassEnabled,
         bottomPadding = bottomPadding,
         onBack = onBack,
         onPlayTracks = { songs, idx -> vm.playTracks(songs, idx, shuffled = false) },
+        onRetryDownload = vm::retryDownload,
+        onCancelDownload = vm::cancelDownload,
         onRemoveDownload = vm::removeDownload,
     )
 }

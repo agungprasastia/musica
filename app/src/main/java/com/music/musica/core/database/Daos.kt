@@ -162,6 +162,9 @@ interface LyricsCacheDao {
 
 @Dao
 interface DownloadDao {
+    @Query("SELECT * FROM downloads WHERE videoId = :videoId LIMIT 1")
+    suspend fun get(videoId: String): DownloadEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: DownloadEntity)
 

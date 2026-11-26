@@ -36,6 +36,7 @@ import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.HighQuality
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Lyrics
@@ -122,6 +123,8 @@ fun SettingsScreen(
     onOpenEqualizer: () -> Unit,
     onSetWifiQuality: (AudioQuality) -> Unit,
     onSetCellularQuality: (AudioQuality) -> Unit,
+    onSetDownloadQuality: (AudioQuality) -> Unit = {},
+    onSetWifiOnlyDownloads: (Boolean) -> Unit = {},
     onSetTheme: (ThemeMode) -> Unit,
     onSetPlayerTheme: (PlayerTheme) -> Unit,
     onSetFullBleedCover: (Boolean) -> Unit,
@@ -480,7 +483,7 @@ fun SettingsScreen(
             }
 
             // 6. Storage & Downloads
-            if (matches("storage", "penyimpanan", "download", "unduhan", "cache", "limit", "batas")) {
+            if (matches("storage", "penyimpanan", "download", "unduhan", "cache", "limit", "batas", "wifi", "wi-fi", "quality", "kualitas")) {
                 item(key = "sec_storage") {
                     SettingsGroup(title = stringResource(R.string.settings_section_storage)) {
                         SettingsValueRow(
@@ -489,6 +492,27 @@ fun SettingsScreen(
                             value = "",
                             showChevron = true,
                             onClick = onOpenDownloads,
+                        )
+                        GroupDivider()
+                        SettingsSegmentedRow(
+                            icon = Icons.Rounded.HighQuality,
+                            title = stringResource(R.string.settings_download_quality),
+                            options = listOf(
+                                stringResource(R.string.quality_short_low),
+                                stringResource(R.string.quality_short_medium),
+                                stringResource(R.string.quality_short_high),
+                                stringResource(R.string.quality_short_max),
+                            ),
+                            selectedIndex = AudioQuality.entries.indexOf(settings.downloadQuality),
+                            onSelect = { onSetDownloadQuality(AudioQuality.entries[it]) },
+                        )
+                        GroupDivider()
+                        SettingsSwitchRow(
+                            icon = Icons.Rounded.Wifi,
+                            title = stringResource(R.string.settings_wifi_only_downloads),
+                            subtitle = stringResource(R.string.settings_wifi_only_downloads_desc),
+                            checked = settings.wifiOnlyDownloads,
+                            onCheckedChange = onSetWifiOnlyDownloads,
                         )
                         GroupDivider()
                         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {

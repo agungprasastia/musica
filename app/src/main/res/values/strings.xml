@@ -166,11 +166,19 @@
     <!-- Downloads -->
     <string name="downloads_title">Offline Downloads</string>
     <string name="downloads_empty">No downloaded songs yet</string>
+    <string name="downloads_empty_subtitle">Save tracks, albums, or playlists to listen offline anytime.</string>
+    <string name="downloads_tab_tracks">Tracks</string>
+    <string name="downloads_tab_collections">Collections</string>
+    <string name="downloads_singles_collection">Individual Tracks</string>
+    <string name="downloads_collection_summary">%1$d of %2$d songs • %3$s</string>
     <string name="downloads_status_queued">Queued</string>
+    <string name="downloads_status_waiting_wifi">Waiting for Wi-Fi…</string>
     <string name="downloads_status_downloading">Downloading %1$d%%</string>
     <string name="downloads_status_completed">Downloaded</string>
     <string name="downloads_status_failed">Failed</string>
     <string name="downloads_notification_channel">Offline Downloads</string>
+    <string name="downloads_notification_progress">Downloading %1$d of %2$d — %3$d%%</string>
+    <string name="downloads_notification_waiting_wifi">Paused — waiting for Wi-Fi</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
@@ -195,10 +203,17 @@
 
     <string name="settings_wifi_quality">Wi-Fi Audio Quality</string>
     <string name="settings_cellular_quality">Mobile Data Quality</string>
+    <string name="settings_download_quality">Download Quality</string>
+    <string name="settings_wifi_only_downloads">Download on Wi-Fi Only</string>
+    <string name="settings_wifi_only_downloads_desc">Pause offline downloads when using mobile data</string>
     <string name="quality_low">Low (64 kbps)</string>
     <string name="quality_medium">Medium (128 kbps)</string>
     <string name="quality_high">High (256 kbps)</string>
     <string name="quality_max">Maximum Available</string>
+    <string name="quality_short_low">Low</string>
+    <string name="quality_short_medium">Med</string>
+    <string name="quality_short_high">High</string>
+    <string name="quality_short_max">Max</string>
 
     <string name="settings_theme">Theme</string>
     <string name="theme_system">System</string>

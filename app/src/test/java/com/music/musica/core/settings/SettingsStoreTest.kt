@@ -81,6 +81,15 @@ class SettingsStoreTest {
         assertEquals(AudioQuality.HIGH, updated.wifiQuality)
         assertEquals(AudioQuality.LOW, updated.cellularQuality)
 
+        // Download quality & Wi-Fi-only download controls
+        assertEquals(AudioQuality.HIGH, updated.downloadQuality)
+        assertFalse(updated.wifiOnlyDownloads)
+        store.setDownloadQuality(AudioQuality.MAX)
+        store.setWifiOnlyDownloads(true)
+        val dlUpdated = store.settings.first()
+        assertEquals(AudioQuality.MAX, dlUpdated.downloadQuality)
+        assertTrue(dlUpdated.wifiOnlyDownloads)
+
         // Lower / upper bound clamping
         store.setAudioCacheLimitMb(10)
         store.setCrossfadeSeconds(-5)
