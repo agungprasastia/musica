@@ -10,10 +10,19 @@
     <string name="tab_search">Cari</string>
 
     <!-- Onboarding & Auth -->
-    <string name="onboarding_welcome_title">Selamat Datang di Musica</string>
-    <string name="onboarding_welcome_subtitle">Klien YouTube Music estetik dengan kaca buram, warna dinamis, dan lirik tersinkronisasi.</string>
+    <string name="onboarding_welcome_title">Jutaan lagu, putar di Musica</string>
+    <string name="onboarding_welcome_subtitle">Audio jernih, lirik per kata, unduhan offline, dan tampilan Liquid Glass yang hidup.</string>
+    <string name="onboarding_feature_lyrics_title">Lirik Per Kata</string>
+    <string name="onboarding_feature_lyrics_desc">Ikuti setiap ketukan dengan sorotan suku kata real-time</string>
+    <string name="onboarding_feature_offline_title">Gapless &amp; Siap Offline</string>
+    <string name="onboarding_feature_offline_desc">Transisi lagu mulus tanpa jeda dan unduhan hemat kuota</string>
+    <string name="onboarding_feature_glass_title">Warna Dinamis &amp; Kaca Buram</string>
+    <string name="onboarding_feature_glass_desc">Latar adaptif yang menyatu dengan setiap sampul album</string>
+    <string name="onboarding_next">Lanjut</string>
+    <string name="onboarding_account_title">Hubungkan akun YouTube kamu</string>
+    <string name="onboarding_account_body">Bawa koleksi, playlist, Lagu Disukai, dan mix personalisasi kamu langsung ke Musica.</string>
     <string name="onboarding_sign_in_google">Masuk dengan Google</string>
-    <string name="onboarding_continue_guest">Lanjut sebagai Tamu</string>
+    <string name="onboarding_continue_guest">Lewati dulu</string>
     <string name="onboarding_connect_title">Personalisasi Berandamu</string>
     <string name="onboarding_connect_subtitle">Masuk ke YouTube Music untuk menyinkronkan rekomendasi Beranda, Lagu Disukai, dan playlist—atau lewati kapan saja.</string>
     <string name="onboarding_skip">Lewati dulu</string>

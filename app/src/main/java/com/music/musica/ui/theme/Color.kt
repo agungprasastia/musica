@@ -28,8 +28,36 @@ val DefaultMeshDarkColors = listOf(
 )
 
 val OnboardingMeshColors = listOf(
-    Color(0xFF6B1030),
-    Color(0xFF2C1359),
-    Color(0xFF0F2D52),
-    Color(0xFF3E0F29),
+    Color(0xFFFA2D48),
+    Color(0xFF7B2FF7),
+    Color(0xFFFF7A45),
+    Color(0xFF2E1A8A),
+)
+
+/**
+ * Luminous cycling palettes for the Welcome onboarding canvas, starting on Musica's crimson red.
+ */
+val WelcomeMeshPalettes: List<List<Color>> = listOf(
+    // Crimson, violet, ember
+    listOf(Color(0xFFFA2D48), Color(0xFF7B2FF7), Color(0xFFFF7A45), Color(0xFF2E1A8A)),
+    // Sunset rose
+    listOf(Color(0xFFFF4E8A), Color(0xFFFF9A3C), Color(0xFFE0245E), Color(0xFF6A1B9A)),
+    // Deep ocean
+    listOf(Color(0xFF1E88E5), Color(0xFF00BFA5), Color(0xFF5E35B1), Color(0xFF0D47A1)),
+    // Aurora
+    listOf(Color(0xFF00C853), Color(0xFF00B8D4), Color(0xFF7C4DFF), Color(0xFF1A237E)),
+    // Grape & rose
+    listOf(Color(0xFFD500F9), Color(0xFFFF4081), Color(0xFF651FFF), Color(0xFF4A148C)),
+    // Warm amber
+    listOf(Color(0xFFFFB300), Color(0xFFFF5252), Color(0xFFF06292), Color(0xFF6D2E46)),
+)
+
+/**
+ * Red-forward cycling palettes for the YouTube account connection step.
+ */
+val ConnectMeshPalettes: List<List<Color>> = listOf(
+    listOf(Color(0xFFFF1E3C), Color(0xFFC2185B), Color(0xFFFF8F3D), Color(0xFF4A1C8C)),
+    listOf(Color(0xFFE53935), Color(0xFFFF6E40), Color(0xFFAD1457), Color(0xFF311B92)),
+    listOf(Color(0xFFFF3D00), Color(0xFFD81B60), Color(0xFF8E24AA), Color(0xFFB71C1C)),
+    listOf(Color(0xFFF50057), Color(0xFFFF9100), Color(0xFFC51162), Color(0xFF4527A0)),
 )

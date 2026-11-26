@@ -67,6 +67,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -95,6 +96,32 @@ import kotlin.math.sin
 val FLOATING_BAR_GUTTER = 19.dp
 val FLOATING_BAR_MAX_WIDTH = 440.dp
 val ROW_DIVIDER_INSET = 80.dp
+
+/**
+ * Official Musica brand emblem matching `ic_launcher_foreground.xml` 1-to-1:
+ * three parallel 20-degree kinetic ribbons plus the signature rhythm dot.
+ */
+@Composable
+fun MusicaBrandEmblem(
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier = modifier) {
+        val side = minOf(size.width, size.height)
+        val ox = (size.width - side) / 2f
+        val oy = (size.height - side) / 2f
+        val box = 44f
+        fun pt(vx: Float, vy: Float): Offset = Offset(
+            x = ox + (vx - 32.15f) / box * side,
+            y = oy + (vy - 32.0f) / box * side,
+        )
+        val strokeWidth = (7.8f / box) * side
+        drawLine(color = color, start = pt(36.5f, 68.9f), end = pt(43.8f, 48.9f), strokeWidth = strokeWidth, cap = StrokeCap.Round)
+        drawLine(color = color, start = pt(49.8f, 70.9f), end = pt(61.4f, 39.1f), strokeWidth = strokeWidth, cap = StrokeCap.Round)
+        drawLine(color = color, start = pt(64.5f, 68.9f), end = pt(71.8f, 48.9f), strokeWidth = strokeWidth, cap = StrokeCap.Round)
+        drawCircle(color = color, radius = (3.9f / box) * side, center = pt(48.1f, 37.1f))
+    }
+}
 
 /**
  * Crisp 1dp 15%-opacity hairline border used around every album, playlist, and track cover.

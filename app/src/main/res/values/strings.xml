@@ -10,10 +10,19 @@
     <string name="tab_search">Search</string>
 
     <!-- Onboarding & Auth -->
-    <string name="onboarding_welcome_title">Welcome to Musica</string>
-    <string name="onboarding_welcome_subtitle">Aesthetic YouTube Music client with frosted glass, dynamic colors, and synced lyrics.</string>
+    <string name="onboarding_welcome_title">Millions of songs, stream on Musica</string>
+    <string name="onboarding_welcome_subtitle">Pure audio, word-synced lyrics, offline downloads, and luminous Liquid Glass.</string>
+    <string name="onboarding_feature_lyrics_title">Word-Synced Lyrics</string>
+    <string name="onboarding_feature_lyrics_desc">Follow every beat with real-time syllable highlights</string>
+    <string name="onboarding_feature_offline_title">Gapless &amp; Offline Ready</string>
+    <string name="onboarding_feature_offline_desc">Seamless album playback and downloads anywhere</string>
+    <string name="onboarding_feature_glass_title">Dynamic Colors &amp; Glass</string>
+    <string name="onboarding_feature_glass_desc">Living artwork backdrops that react to every song</string>
+    <string name="onboarding_next">Continue</string>
+    <string name="onboarding_account_title">Connect your YouTube account</string>
+    <string name="onboarding_account_body">Bring your library, playlists, Liked Songs, and personalized mixes straight into Musica.</string>
     <string name="onboarding_sign_in_google">Sign in with Google</string>
-    <string name="onboarding_continue_guest">Continue as Guest</string>
+    <string name="onboarding_continue_guest">Skip sign in</string>
     <string name="onboarding_connect_title">Personalize Your Feed</string>
     <string name="onboarding_connect_subtitle">Sign in to YouTube Music to sync your Home recommendations, Liked Songs, and playlists—or skip anytime.</string>
     <string name="onboarding_skip">Skip for now</string>

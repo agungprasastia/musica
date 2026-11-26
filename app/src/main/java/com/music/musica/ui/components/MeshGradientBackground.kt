@@ -1,9 +1,14 @@
 package com.music.musica.ui.components
 
 import android.graphics.Bitmap
+import android.os.Build
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -13,17 +18,24 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.core.graphics.ColorUtils
 import coil3.SingletonImageLoader
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
@@ -34,6 +46,8 @@ import com.music.musica.core.model.PlayerTheme
 import com.music.musica.core.model.upsizeArtworkUrl
 import com.music.musica.ui.theme.DefaultMeshDarkColors
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.PI
@@ -275,92 +289,164 @@ private fun boxBlurVertical(src: IntArray, dst: IntArray, w: Int, h: Int, r: Int
     }
 }
 
+const val MESH_CYCLE_MILLIS = 3_600
+
 /**
- * Legacy 4-blob smooth radial mesh gradient that drifts gently for 8 seconds upon track/key
- * change and then settles cleanly at rest instead of running permanently at 60/120Hz.
+ * Cycles smoothly through [palettes] every [stepMillis]. When [reduceAnimation] is enabled,
+ * stays cleanly on the first palette.
+ */
+@Composable
+fun rememberCyclingMeshColors(
+    palettes: List<List<Color>>,
+    stepMillis: Int = MESH_CYCLE_MILLIS,
+    reduceAnimation: Boolean = false,
+): List<Color> {
+    var step by remember(palettes) { mutableIntStateOf(0) }
+    LaunchedEffect(palettes, stepMillis, reduceAnimation) {
+        if (reduceAnimation || palettes.size <= 1) return@LaunchedEffect
+        while (isActive) {
+            delay(stepMillis.toLong())
+            step++
+        }
+    }
+    return palettes[step % palettes.size]
+}
+
+/**
+ * 4-blob smooth radial mesh gradient with Oklab color crossfading, smootherstep radial falloff,
+ * and optional continuous orbital drift (used by Onboarding) or 8-second settle (used by Player/Cards).
  */
 @Composable
 fun MeshGradientBackground(
     colors: List<Color> = DefaultMeshDarkColors,
     driftKey: Any = Unit,
     reduceAnimation: Boolean = false,
+    continuous: Boolean = false,
+    driftMillis: Int = 8_000,
+    colorFadeMillis: Int = 1_400,
+    blurRadius: Dp = 56.dp,
     scrimAlpha: Float = 0.24f,
     modifier: Modifier = Modifier,
 ) {
-    val safeColors = if (colors.size >= 4) colors else DefaultMeshDarkColors
+    val tuned = remember(colors) {
+        val base = if (colors.size >= 4) colors.take(4) else (colors + DefaultMeshDarkColors).take(4)
+        base.map { it.tunedMeshColor() }
+    }
+    val colorSpec: AnimationSpec<Color> = if (reduceAnimation) snap() else tween(durationMillis = colorFadeMillis)
+    val animatedColors = tuned.mapIndexed { idx, c ->
+        animateColorAsState(targetValue = c, animationSpec = colorSpec, label = "mesh_c_$idx")
+    }
+    val baseColor by animateColorAsState(
+        targetValue = tuned.first().dimmedMeshColor(),
+        animationSpec = colorSpec,
+        label = "mesh_base",
+    )
+
     val drift = remember { Animatable(0f) }
 
-    LaunchedEffect(driftKey, reduceAnimation) {
-        if (reduceAnimation) {
-            drift.snapTo(0.35f)
-        } else {
-            drift.snapTo(0f)
-            drift.animateTo(
-                targetValue = (1.6 * PI).toFloat(),
-                animationSpec = tween(durationMillis = 8_000, easing = FastOutSlowInEasing),
-            )
-        }
-    }
-
-    val phase = drift.value
-
-    Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val w = size.width
-            val h = size.height
-            val baseRadius = maxOf(w, h) * 0.82f
-
-            drawRect(
-                brush = Brush.verticalGradient(
-                    colors = listOf(safeColors[0], safeColors[3]),
-                ),
-            )
-
-            val c1 = Offset(w * (0.24f + 0.16f * cos(phase)), h * (0.22f + 0.14f * sin(phase)))
-            drawCircle(
-                brush = smootherRadial(safeColors[0], c1, baseRadius),
-                radius = baseRadius,
-                center = c1,
-            )
-
-            val c2 = Offset(w * (0.78f + 0.15f * sin(phase * 0.85f)), h * (0.30f + 0.15f * cos(phase * 0.85f)))
-            drawCircle(
-                brush = smootherRadial(safeColors[1], c2, baseRadius * 0.94f),
-                radius = baseRadius * 0.94f,
-                center = c2,
-            )
-
-            val c3 = Offset(w * (0.46f + 0.20f * cos(phase + 2.1f)), h * (0.76f + 0.12f * sin(phase + 1.4f)))
-            drawCircle(
-                brush = smootherRadial(safeColors[2], c3, baseRadius * 0.90f),
-                radius = baseRadius * 0.90f,
-                center = c3,
-            )
-
-            if (scrimAlpha > 0f) {
-                drawRect(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Black.copy(alpha = scrimAlpha * 0.5f),
-                            Color.Black.copy(alpha = scrimAlpha),
-                            Color.Black.copy(alpha = (scrimAlpha * 1.6f).coerceAtMost(0.65f)),
-                        ),
-                    ),
+    LaunchedEffect(driftKey, reduceAnimation, continuous, driftMillis) {
+        when {
+            reduceAnimation -> drift.snapTo(0.35f)
+            continuous -> {
+                while (isActive) {
+                    drift.animateTo(
+                        targetValue = drift.value + (2.0 * PI).toFloat(),
+                        animationSpec = tween(durationMillis = driftMillis * 4, easing = LinearEasing),
+                    )
+                }
+            }
+            else -> {
+                drift.snapTo(0f)
+                drift.animateTo(
+                    targetValue = (1.6 * PI).toFloat(),
+                    animationSpec = tween(durationMillis = driftMillis, easing = FastOutSlowInEasing),
                 )
             }
         }
     }
+
+    val blurModifier = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && blurRadius > 0.dp) {
+        Modifier.blur(blurRadius)
+    } else {
+        Modifier
+    }
+
+    Box(modifier = modifier.fillMaxSize().clipToBounds().background(Color.Black)) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = 1.28f
+                    scaleY = 1.28f
+                }
+                .background(baseColor)
+                .then(blurModifier),
+        ) {
+            val w = size.width
+            val h = size.height
+            val phase = drift.value
+            val radius = maxOf(w, h) * 0.68f
+            val anchors = listOf(
+                Offset(0.20f, 0.24f),
+                Offset(0.80f, 0.22f),
+                Offset(0.76f, 0.78f),
+                Offset(0.24f, 0.76f),
+            )
+            val speeds = floatArrayOf(1f, -0.7f, 0.85f, -1.15f)
+
+            animatedColors.forEachIndexed { idx, colorState ->
+                val anchor = anchors[idx]
+                val center = Offset(
+                    x = (anchor.x + 0.16f * cos(phase * speeds[idx] + idx * 1.7f)) * w,
+                    y = (anchor.y + 0.16f * sin(phase * speeds[idx] * 0.9f + idx * 2.3f)) * h,
+                )
+                drawCircle(
+                    brush = smootherRadial(colorState.value, center, radius),
+                    radius = radius,
+                    center = center,
+                )
+            }
+        }
+
+        if (scrimAlpha > 0f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0.00f to Color.Black.copy(alpha = scrimAlpha * 0.45f),
+                            0.50f to Color.Black.copy(alpha = scrimAlpha * 0.85f),
+                            1.00f to Color.Black.copy(alpha = (scrimAlpha * 1.75f).coerceAtMost(0.68f)),
+                        ),
+                    ),
+            )
+        }
+    }
 }
+
+private fun smootherStep(t: Float): Float = t * t * t * (t * (t * 6f - 15f) + 10f)
 
 private fun smootherRadial(color: Color, center: Offset, radius: Float): Brush =
     Brush.radialGradient(
-        colorStops = arrayOf(
-            0.00f to color.copy(alpha = 0.92f),
-            0.25f to color.copy(alpha = 0.80f),
-            0.50f to color.copy(alpha = 0.46f),
-            0.75f to color.copy(alpha = 0.14f),
-            1.00f to Color.Transparent,
-        ),
+        colorStops = Array(7) { i ->
+            val t = i / 6f
+            t to color.copy(alpha = 0.86f * (1f - smootherStep(t)))
+        },
         center = center,
         radius = radius,
     )
+
+private fun Color.tunedMeshColor(): Color {
+    val hsl = FloatArray(3)
+    ColorUtils.colorToHSL(toArgb(), hsl)
+    hsl[1] = (hsl[1] * 1.25f).coerceAtMost(1f)
+    hsl[2] = hsl[2].coerceIn(0.24f, 0.56f)
+    return Color(ColorUtils.HSLToColor(hsl))
+}
+
+private fun Color.dimmedMeshColor(): Color {
+    val hsl = FloatArray(3)
+    ColorUtils.colorToHSL(toArgb(), hsl)
+    hsl[2] = 0.12f
+    return Color(ColorUtils.HSLToColor(hsl))
+}
