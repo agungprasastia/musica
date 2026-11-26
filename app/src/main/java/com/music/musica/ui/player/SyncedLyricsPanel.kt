@@ -38,12 +38,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -117,21 +119,23 @@ fun SyncedLyricsPanel(
 
     val syncedResult = (lyricsState as? UiState.Success)?.data?.takeIf { it.isSynced && it.lines.isNotEmpty() }
 
-    var smoothPositionMs by remember { mutableLongStateOf(playerPositionMs) }
+    // Keep 60fps interpolated position inside a State object read ONLY via derivedStateOf or
+    // lambda providers so outer SyncedLyricsPanel and inactive lyric rows never recompose at 60fps.
+    val smoothPosState = remember { mutableLongStateOf(playerPositionMs) }
     LaunchedEffect(playerPositionMs, isPlaying, playbackSpeed, syncedResult != null) {
         if (syncedResult == null) {
-            smoothPositionMs = playerPositionMs
+            smoothPosState.longValue = playerPositionMs
             return@LaunchedEffect
         }
-        val drift = smoothPositionMs - playerPositionMs
-        val startPos = if (isPlaying && drift in 1L..300L) smoothPositionMs else playerPositionMs
+        val drift = smoothPosState.longValue - playerPositionMs
+        val startPos = if (isPlaying && drift in 1L..300L) smoothPosState.longValue else playerPositionMs
         val anchorTime = SystemClock.elapsedRealtime()
-        smoothPositionMs = startPos
+        smoothPosState.longValue = startPos
         if (!isPlaying) return@LaunchedEffect
         while (true) {
             withFrameNanos {
                 val elapsed = SystemClock.elapsedRealtime() - anchorTime
-                smoothPositionMs = startPos + (elapsed * playbackSpeed).toLong()
+                smoothPosState.longValue = startPos + (elapsed * playbackSpeed).toLong()
             }
         }
     }
@@ -194,9 +198,40 @@ fun SyncedLyricsPanel(
                         }
                     }
 
-                    val activeIndex = if (result.isSynced) {
-                        SyncedLyricsParser.activeLineIndex(result.lines, smoothPositionMs, result.offsetMs)
-                    } else -1
+                    val activeIndex by remember(result) {
+                        derivedStateOf {
+                            if (result.isSynced) {
+                                SyncedLyricsParser.activeLineIndex(result.lines, smoothPosState.longValue, result.offsetMs)
+                            } else {
+                                -1
+                            }
+                        }
+                    }
+
+                    val showIntroDots by remember(result) {
+                        derivedStateOf {
+                            result.isSynced &&
+                                result.lines.first().startMs > 5_000L &&
+                                (smoothPosState.longValue + result.offsetMs) < result.lines.first().startMs
+                        }
+                    }
+
+                    val activeGapIndex by remember(result) {
+                        derivedStateOf {
+                            if (!result.isSynced || activeIndex < 0) {
+                                -1
+                            } else {
+                                val line = result.lines.getOrNull(activeIndex)
+                                val next = result.lines.getOrNull(activeIndex + 1)
+                                val pos = smoothPosState.longValue + result.offsetMs
+                                if (line != null && next != null && (next.startMs - line.endMs) >= 5_500L && pos in line.endMs..next.startMs) {
+                                    activeIndex
+                                } else {
+                                    -1
+                                }
+                            }
+                        }
+                    }
 
                     LaunchedEffect(activeIndex) {
                         if (activeIndex >= 0 &&
@@ -211,7 +246,9 @@ fun SyncedLyricsPanel(
                         }
                     }
 
-                    val effectivePos = smoothPositionMs + result.offsetMs
+                    val effectivePosProvider = remember(result) {
+                        { smoothPosState.longValue + result.offsetMs }
+                    }
 
                     Column(modifier = Modifier.fillMaxSize()) {
                         // Source + Offset Glass Chips
@@ -274,10 +311,13 @@ fun SyncedLyricsPanel(
                             verticalArrangement = Arrangement.spacedBy(20.dp),
                         ) {
                             // Leading instrumental indicator if first line starts > 5s in
-                            if (result.isSynced && result.lines.first().startMs > 5_000L && effectivePos < result.lines.first().startMs) {
+                            if (showIntroDots) {
+                                val firstStart = result.lines.first().startMs
                                 item(key = "intro_dots") {
                                     InstrumentalDots(
-                                        progress = (effectivePos.toFloat() / result.lines.first().startMs.toFloat()).coerceIn(0f, 1f),
+                                        progressProvider = {
+                                            (effectivePosProvider().toFloat() / firstStart.toFloat()).coerceIn(0f, 1f)
+                                        },
                                         reduceAnimation = reduceAnimation,
                                     )
                                 }
@@ -294,7 +334,7 @@ fun SyncedLyricsPanel(
                                     isSynced = result.isSynced,
                                     isActive = isActive,
                                     distanceFromActive = distance,
-                                    effectivePosMs = effectivePos,
+                                    effectivePosProvider = effectivePosProvider,
                                     blurEnabled = blurUnfocusedLyrics && !isBrowsing && result.isSynced,
                                     isBrowsing = isBrowsing,
                                     reduceAnimation = reduceAnimation,
@@ -316,13 +356,15 @@ fun SyncedLyricsPanel(
                                 )
 
                                 // Show 3-dot instrumental countdown if next line has a > 5.5s gap
-                                val nextLine = result.lines.getOrNull(index + 1)
-                                if (result.isSynced && nextLine != null) {
-                                    val gap = nextLine.startMs - line.endMs
-                                    if (gap >= 5_500L && effectivePos in line.endMs..nextLine.startMs) {
+                                if (index == activeGapIndex) {
+                                    val nextLine = result.lines.getOrNull(index + 1)
+                                    if (nextLine != null) {
+                                        val gap = (nextLine.startMs - line.endMs).coerceAtLeast(1L)
                                         Spacer(Modifier.height(10.dp))
                                         InstrumentalDots(
-                                            progress = ((effectivePos - line.endMs).toFloat() / gap.toFloat()).coerceIn(0f, 1f),
+                                            progressProvider = {
+                                                ((effectivePosProvider() - line.endMs).toFloat() / gap.toFloat()).coerceIn(0f, 1f)
+                                            },
                                             reduceAnimation = reduceAnimation,
                                         )
                                     }
@@ -367,7 +409,7 @@ private fun AppleLyricLineRow(
     isSynced: Boolean,
     isActive: Boolean,
     distanceFromActive: Int,
-    effectivePosMs: Long,
+    effectivePosProvider: () -> Long,
     blurEnabled: Boolean,
     isBrowsing: Boolean,
     reduceAnimation: Boolean,
@@ -437,43 +479,11 @@ private fun AppleLyricLineRow(
             .padding(vertical = 2.dp),
     ) {
         if (isActive && line.isWordSynced) {
-            val annotated = buildAnnotatedString {
-                line.words.forEachIndexed { idx, word ->
-                    val wordDuration = (word.endMs - word.startMs).coerceAtLeast(1L)
-                    val wordProgress = when {
-                        effectivePosMs >= word.endMs -> 1f
-                        effectivePosMs <= word.startMs -> 0f
-                        else -> ((effectivePosMs - word.startMs).toFloat() / wordDuration.toFloat()).coerceIn(0f, 1f)
-                    }
-                    val isHeldNote = wordDuration >= 700L && wordProgress in 0.1f..0.95f
-                    val wordColor = when {
-                        wordProgress >= 0.82f -> Color.White
-                        wordProgress > 0f -> Color.White.copy(alpha = 0.52f + 0.48f * wordProgress)
-                        else -> Color.White.copy(alpha = 0.40f)
-                    }
-                    withStyle(
-                        SpanStyle(
-                            color = wordColor,
-                            fontWeight = if (wordProgress > 0f) FontWeight.ExtraBold else FontWeight.Bold,
-                            shadow = if (isHeldNote || wordProgress >= 0.85f) {
-                                Shadow(
-                                    color = Color.White.copy(alpha = if (isHeldNote) 0.52f else 0.24f),
-                                    offset = Offset.Zero,
-                                    blurRadius = if (isHeldNote) 14f else 6f,
-                                )
-                            } else null,
-                        ),
-                    ) {
-                        append(word.text)
-                    }
-                    if (word.trailingSpace && idx < line.words.lastIndex) append(" ")
-                }
-            }
-            Text(
-                text = annotated,
+            WordSyncedActiveText(
+                line = line,
                 fontSize = fontSize,
                 lineHeight = lineHeight,
-                letterSpacing = (-0.4).sp,
+                effectivePosProvider = effectivePosProvider,
             )
         } else {
             Text(
@@ -489,10 +499,59 @@ private fun AppleLyricLineRow(
 }
 
 @Composable
+private fun WordSyncedActiveText(
+    line: LyricLine,
+    fontSize: TextUnit,
+    lineHeight: TextUnit,
+    effectivePosProvider: () -> Long,
+) {
+    val effectivePosMs = effectivePosProvider()
+    val annotated = buildAnnotatedString {
+        line.words.forEachIndexed { idx, word ->
+            val wordDuration = (word.endMs - word.startMs).coerceAtLeast(1L)
+            val wordProgress = when {
+                effectivePosMs >= word.endMs -> 1f
+                effectivePosMs <= word.startMs -> 0f
+                else -> ((effectivePosMs - word.startMs).toFloat() / wordDuration.toFloat()).coerceIn(0f, 1f)
+            }
+            val isHeldNote = wordDuration >= 700L && wordProgress in 0.1f..0.95f
+            val wordColor = when {
+                wordProgress >= 0.82f -> Color.White
+                wordProgress > 0f -> Color.White.copy(alpha = 0.52f + 0.48f * wordProgress)
+                else -> Color.White.copy(alpha = 0.40f)
+            }
+            withStyle(
+                SpanStyle(
+                    color = wordColor,
+                    fontWeight = if (wordProgress > 0f) FontWeight.ExtraBold else FontWeight.Bold,
+                    shadow = if (isHeldNote || wordProgress >= 0.85f) {
+                        Shadow(
+                            color = Color.White.copy(alpha = if (isHeldNote) 0.52f else 0.24f),
+                            offset = Offset.Zero,
+                            blurRadius = if (isHeldNote) 14f else 6f,
+                        )
+                    } else null,
+                ),
+            ) {
+                append(word.text)
+            }
+            if (word.trailingSpace && idx < line.words.lastIndex) append(" ")
+        }
+    }
+    Text(
+        text = annotated,
+        fontSize = fontSize,
+        lineHeight = lineHeight,
+        letterSpacing = (-0.4).sp,
+    )
+}
+
+@Composable
 private fun InstrumentalDots(
-    progress: Float,
+    progressProvider: () -> Float,
     reduceAnimation: Boolean,
 ) {
+    val progress = progressProvider()
     val pulse = if (reduceAnimation) {
         1f
     } else {

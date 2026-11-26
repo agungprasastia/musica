@@ -55,8 +55,14 @@ interface SongDao {
     @Query("SELECT * FROM songs WHERE videoId = :videoId LIMIT 1")
     suspend fun getById(videoId: String): SongEntity?
 
-    @Query("UPDATE songs SET isLiked = :liked, likedAtMs = :likedAtMs WHERE videoId = :videoId")
+    @Query("UPDATE songs SET isLiked = :liked, likedAtMs = :likedAtMs, isDisliked = CASE WHEN :liked = 1 THEN 0 ELSE isDisliked END WHERE videoId = :videoId")
     suspend fun setLiked(videoId: String, liked: Boolean, likedAtMs: Long)
+
+    @Query("UPDATE songs SET isDisliked = :disliked, isLiked = CASE WHEN :disliked = 1 THEN 0 ELSE isLiked END, likedAtMs = CASE WHEN :disliked = 1 THEN 0 ELSE likedAtMs END WHERE videoId = :videoId")
+    suspend fun setDisliked(videoId: String, disliked: Boolean)
+
+    @Query("SELECT videoId FROM songs WHERE isDisliked = 1")
+    fun observeDislikedIds(): Flow<List<String>>
 
     @Query("SELECT * FROM songs WHERE isLiked = 1 ORDER BY likedAtMs DESC")
     fun observeLikedSongs(): Flow<List<SongEntity>>
@@ -79,10 +85,13 @@ interface PlaylistDao {
         FROM playlists p
         LEFT JOIN playlist_songs ps ON p.playlistId = ps.playlistId
         GROUP BY p.playlistId
-        ORDER BY p.updatedAtMs DESC
+        ORDER BY p.isPinned DESC, p.pinnedAtMs DESC, p.updatedAtMs DESC
         """,
     )
     fun observePlaylistsWithCounts(): Flow<List<PlaylistWithCount>>
+
+    @Query("UPDATE playlists SET isPinned = :pinned, pinnedAtMs = :pinnedAtMs WHERE playlistId = :playlistId")
+    suspend fun setPinned(playlistId: String, pinned: Boolean, pinnedAtMs: Long)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun addSongToPlaylist(ref: PlaylistSongCrossRef)
@@ -174,4 +183,37 @@ interface DownloadDao {
 
     @Query("UPDATE downloads SET status = 'FAILED', progressPercent = 0 WHERE status IN ('QUEUED', 'DOWNLOADING')")
     suspend fun markIncompleteAsFailed()
+}
+
+@Dao
+interface SubscribedArtistDao {
+    @Upsert
+    suspend fun upsert(artist: SubscribedArtistEntity)
+
+    @Query("DELETE FROM subscribed_artists WHERE browseId = :browseId")
+    suspend fun delete(browseId: String)
+
+    @Query("SELECT * FROM subscribed_artists ORDER BY subscribedAtMs DESC")
+    fun observeAll(): Flow<List<SubscribedArtistEntity>>
+
+    @Query("SELECT browseId FROM subscribed_artists")
+    fun observeIds(): Flow<List<String>>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM subscribed_artists WHERE browseId = :browseId)")
+    suspend fun isSubscribed(browseId: String): Boolean
+}
+
+@Dao
+interface SavedCollectionDao {
+    @Upsert
+    suspend fun upsert(collection: SavedCollectionEntity)
+
+    @Query("DELETE FROM saved_collections WHERE browseId = :browseId")
+    suspend fun delete(browseId: String)
+
+    @Query("SELECT * FROM saved_collections ORDER BY savedAtMs DESC")
+    fun observeAll(): Flow<List<SavedCollectionEntity>>
+
+    @Query("SELECT browseId FROM saved_collections")
+    fun observeIds(): Flow<List<String>>
 }

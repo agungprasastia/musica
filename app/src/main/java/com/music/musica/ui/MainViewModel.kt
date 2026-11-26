@@ -69,6 +69,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val likedSongs = container.libraryRepository.likedSongs.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val likedIds = container.libraryRepository.likedIds.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
     val localPlaylists = container.libraryRepository.localPlaylists.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val subscribedArtistIds = container.libraryRepository.subscribedArtistIds.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
     val recentHistory = container.libraryRepository.recentHistory.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     val recentlyPlayedSongs = container.libraryRepository.recentlyPlayedSongs.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val recentSearches = container.libraryRepository.recentSearchQueries.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -503,6 +504,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { container.libraryRepository.createPlaylist(title) }
     }
 
+    fun togglePlaylistPin(playlistId: String) {
+        viewModelScope.launch { container.libraryRepository.togglePlaylistPin(playlistId) }
+    }
+
+    fun toggleArtistSubscribed(browseId: String, name: String, thumbnailUrl: String?) {
+        viewModelScope.launch { container.libraryRepository.toggleArtistSubscribed(browseId, name, thumbnailUrl) }
+    }
+
     fun addSongToPlaylist(playlistId: String, song: Song) {
         viewModelScope.launch { container.libraryRepository.addSongToPlaylist(playlistId, song) }
     }
@@ -583,7 +592,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setBlurUnfocusedLyrics(enabled: Boolean) = viewModelScope.launch { container.settingsStore.setBlurUnfocusedLyrics(enabled) }
     fun setShowLyricsPreviewStrip(enabled: Boolean) = viewModelScope.launch { container.settingsStore.setShowLyricsPreviewStrip(enabled) }
     fun setSleepTimerFadeOut(enabled: Boolean) = viewModelScope.launch { container.settingsStore.setSleepTimerFadeOut(enabled) }
-    fun setAudioCacheLimitMb(mb: Int) = viewModelScope.launch { container.settingsStore.setAudioCacheLimitMb(mb) }
+    fun setAudioCacheLimitMb(mb: Int) = viewModelScope.launch {
+        container.settingsStore.setAudioCacheLimitMb(mb)
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            container.audioCacheProvider.updateStreamCacheLimitMb(mb)
+            _audioCacheBytes.value = container.audioCacheProvider.streamCacheSizeBytes()
+        }
+    }
     fun setFrostedGlass(enabled: Boolean) = viewModelScope.launch { container.settingsStore.setFrostedGlass(enabled) }
     fun setReduceAnimation(enabled: Boolean) = viewModelScope.launch { container.settingsStore.setReduceAnimation(enabled) }
 

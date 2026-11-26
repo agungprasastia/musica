@@ -109,6 +109,7 @@ fun DetailScreen(
     state: UiState<DetailPage>,
     activeVideoId: String?,
     downloadedIds: Set<String>,
+    subscribedArtistIds: Set<String> = emptySet(),
     hazeState: HazeState,
     frostedGlassEnabled: Boolean,
     fullBleedCoverArt: Boolean = false,
@@ -118,6 +119,7 @@ fun DetailScreen(
     onRetry: () -> Unit,
     onPlayTracks: (List<Song>, Int, Boolean) -> Unit,
     onDownloadAll: (List<Song>) -> Unit,
+    onToggleSubscribeArtist: (String, String, String?) -> Unit = { _, _, _ -> },
     onItemClick: (ShelfItem) -> Unit,
     onSongMore: (Song) -> Unit,
     onPlayNext: (Song) -> Unit,
@@ -137,7 +139,6 @@ fun DetailScreen(
     var sortMenuOpen by remember(page?.browseId) { mutableStateOf(false) }
     var filterQuery by remember(page?.browseId) { mutableStateOf("") }
     var sortOrder by remember(page?.browseId) { mutableStateOf(TrackSortOrder.DEFAULT) }
-    var artistStarred by remember(page?.browseId) { mutableStateOf(false) }
     var aboutExpanded by remember(page?.browseId) { mutableStateOf(false) }
     val detailHazeState = rememberHazeState()
 
@@ -229,11 +230,14 @@ fun DetailScreen(
                             }
 
                             isArtist -> {
+                                val isSubscribed = detail.browseId in subscribedArtistIds
                                 ArtistHeroHeader(
                                     detail = detail,
                                     palette = palette,
-                                    starred = artistStarred,
-                                    onToggleStar = { artistStarred = !artistStarred },
+                                    starred = isSubscribed,
+                                    onToggleStar = {
+                                        onToggleSubscribeArtist(detail.browseId, detail.title, detail.thumbnailUrl)
+                                    },
                                     onPlay = {
                                         if (detail.tracks.isNotEmpty()) onPlayTracks(detail.tracks, 0, false)
                                     },

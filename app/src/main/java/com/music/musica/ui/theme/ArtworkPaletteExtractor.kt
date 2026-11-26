@@ -164,7 +164,8 @@ fun rememberArtworkPalette(
 ): ArtworkPalette {
     val context = LocalPlatformContext.current
     val fallbackSeed = if (dark) Color(0xFF3A1B33) else Color(0xFF4A3B6B)
-    var seed by remember(imageUrl) {
+    // Hold the previous track's seed until the new artwork decodes so transitions never flash purple.
+    var seed by remember {
         mutableStateOf(imageUrl?.let { artworkSeedCache[it] } ?: fallbackSeed)
     }
 

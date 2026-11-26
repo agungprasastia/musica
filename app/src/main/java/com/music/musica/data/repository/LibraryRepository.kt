@@ -6,6 +6,7 @@ import com.music.musica.core.database.PlaylistEntity
 import com.music.musica.core.database.PlaylistSongCrossRef
 import com.music.musica.core.database.SearchHistoryEntity
 import com.music.musica.core.database.SongEntity
+import com.music.musica.core.database.SubscribedArtistEntity
 import com.music.musica.core.model.BrowseType
 import com.music.musica.core.model.DetailPage
 import com.music.musica.core.model.LikeStatus
@@ -53,6 +54,36 @@ class LibraryRepository(
     }
 
     val recentSearchQueries: Flow<List<String>> = db.searchHistoryDao().observeRecentQueries()
+
+    val subscribedArtistIds: Flow<Set<String>> = db.subscribedArtistDao().observeIds().map { it.toSet() }
+
+    suspend fun togglePlaylistPin(playlistId: String) {
+        val current = db.playlistDao().getPlaylist(playlistId) ?: return
+        val nextPinned = !current.isPinned
+        db.playlistDao().setPinned(
+            playlistId = playlistId,
+            pinned = nextPinned,
+            pinnedAtMs = if (nextPinned) System.currentTimeMillis() else 0L,
+        )
+    }
+
+    suspend fun toggleArtistSubscribed(browseId: String, name: String, thumbnailUrl: String?): Boolean {
+        val currentlySubscribed = db.subscribedArtistDao().isSubscribed(browseId)
+        val next = !currentlySubscribed
+        if (next) {
+            db.subscribedArtistDao().upsert(
+                SubscribedArtistEntity(
+                    browseId = browseId,
+                    name = name,
+                    thumbnailUrl = thumbnailUrl,
+                    subscribedAtMs = System.currentTimeMillis(),
+                ),
+            )
+        } else {
+            db.subscribedArtistDao().delete(browseId)
+        }
+        return next
+    }
 
     suspend fun upsertSongMetadata(song: Song) {
         val inserted = db.songDao().insertIgnore(SongEntity.fromSong(song))

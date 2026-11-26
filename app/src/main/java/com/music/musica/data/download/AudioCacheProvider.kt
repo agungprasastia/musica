@@ -6,7 +6,6 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.cache.CacheDataSource
-import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.NoOpCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.datasource.okhttp.OkHttpDataSource
@@ -34,8 +33,16 @@ class AudioCacheProvider(context: Context) {
         SimpleCache(downloadDir, NoOpCacheEvictor(), databaseProvider)
     }
 
+    private val streamCacheEvictor = DynamicLruCacheEvictor(DEFAULT_STREAM_CACHE_BYTES)
+
     val streamCache: SimpleCache by lazy {
-        SimpleCache(streamCacheDir, LeastRecentlyUsedCacheEvictor(STREAM_CACHE_BYTES), databaseProvider)
+        SimpleCache(streamCacheDir, streamCacheEvictor, databaseProvider)
+    }
+
+    fun updateStreamCacheLimitMb(limitMb: Int) {
+        val clampedBytes = limitMb.coerceIn(128, 4096).toLong() * 1024L * 1024L
+        streamCacheEvictor.maxBytes = clampedBytes
+        runCatching { streamCacheEvictor.applyNow(streamCache) }
     }
 
     val upstreamHttpFactory: OkHttpDataSource.Factory by lazy {
@@ -97,7 +104,7 @@ class AudioCacheProvider(context: Context) {
     }
 
     companion object {
-        private const val STREAM_CACHE_BYTES = 256L * 1024L * 1024L
+        private const val DEFAULT_STREAM_CACHE_BYTES = 512L * 1024L * 1024L
         private const val HTTP_USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
     }

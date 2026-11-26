@@ -312,27 +312,32 @@ internal fun MusicaAppRoot(
                     onBack = { navigator.pop() },
                 )
 
-                topDetail != null -> DetailScreen(
-                    state = topDetail.state,
-                    activeVideoId = activeVideoId,
-                    downloadedIds = downloadedIds,
-                    hazeState = hazeState,
-                    frostedGlassEnabled = settings.frostedGlassEnabled,
-                    fullBleedCoverArt = settings.fullBleedCoverArt,
-                    reduceAnimation = settings.reduceAnimation,
-                    bottomPadding = chromeBottomPadding,
-                    onBack = { navigator.pop() },
-                    onRetry = vm::retryTopDetail,
-                    onPlayTracks = vm::playTracks,
-                    onDownloadAll = { songs ->
-                        vm.downloadAll(songs)
-                        Toast.makeText(context, resources.getString(R.string.toast_download_started), Toast.LENGTH_SHORT).show()
-                    },
-                    onItemClick = { item -> vm.handleShelfItemClick(item) },
-                    onSongMore = onOpenSongMore,
-                    onPlayNext = onPlayNextWithToast,
-                    onAddToQueue = onAddToQueueWithToast,
-                )
+                topDetail != null -> {
+                    val subscribedArtistIds by vm.subscribedArtistIds.collectAsStateWithLifecycle()
+                    DetailScreen(
+                        state = topDetail.state,
+                        activeVideoId = activeVideoId,
+                        downloadedIds = downloadedIds,
+                        subscribedArtistIds = subscribedArtistIds,
+                        hazeState = hazeState,
+                        frostedGlassEnabled = settings.frostedGlassEnabled,
+                        fullBleedCoverArt = settings.fullBleedCoverArt,
+                        reduceAnimation = settings.reduceAnimation,
+                        bottomPadding = chromeBottomPadding,
+                        onBack = { navigator.pop() },
+                        onRetry = vm::retryTopDetail,
+                        onPlayTracks = vm::playTracks,
+                        onDownloadAll = { songs ->
+                            vm.downloadAll(songs)
+                            Toast.makeText(context, resources.getString(R.string.toast_download_started), Toast.LENGTH_SHORT).show()
+                        },
+                        onToggleSubscribeArtist = vm::toggleArtistSubscribed,
+                        onItemClick = { item -> vm.handleShelfItemClick(item) },
+                        onSongMore = onOpenSongMore,
+                        onPlayNext = onPlayNextWithToast,
+                        onAddToQueue = onAddToQueueWithToast,
+                    )
+                }
 
                 else -> when (selectedTab) {
                     0 -> HomeTabHost(
@@ -752,6 +757,7 @@ private fun LibraryTabHost(
         onPlayLiked = { idx -> vm.playTracks(likedSongs, idx, shuffled = false) },
         onOpenPlaylist = vm::openLocalPlaylist,
         onCreatePlaylist = vm::createPlaylist,
+        onTogglePinPlaylist = vm::togglePlaylistPin,
         onOpenDownloads = onOpenDownloads,
         onOpenHistory = onOpenHistory,
         onOpenReplay = onOpenReplay,

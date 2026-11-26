@@ -116,6 +116,7 @@ fun LibraryScreen(
     onPlayLiked: (Int) -> Unit,
     onOpenPlaylist: (UserPlaylist) -> Unit,
     onCreatePlaylist: (String) -> Unit,
+    onTogglePinPlaylist: (String) -> Unit = {},
     onOpenDownloads: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenReplay: () -> Unit,
@@ -126,12 +127,11 @@ fun LibraryScreen(
     onAddToQueue: (Song) -> Unit,
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
-    var pinnedPlaylistIds by remember { mutableStateOf(setOf<String>()) }
     val haptics = LocalHapticFeedback.current
     val screenHazeState = rememberHazeState()
 
-    val orderedPlaylists = remember(playlists, pinnedPlaylistIds) {
-        playlists.sortedByDescending { it.playlistId in pinnedPlaylistIds }
+    val orderedPlaylists = remember(playlists) {
+        playlists.sortedByDescending { it.isPinned }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -289,7 +289,7 @@ fun LibraryScreen(
                         }
 
                         items(orderedPlaylists, key = { "pl_${it.playlistId}" }) { playlist ->
-                            val isPinned = playlist.playlistId in pinnedPlaylistIds
+                            val isPinned = playlist.isPinned
                             Column(
                                 modifier = Modifier
                                     .width(136.dp)
@@ -298,11 +298,7 @@ fun LibraryScreen(
                                         onClick = { onOpenPlaylist(playlist) },
                                         onLongClick = {
                                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            pinnedPlaylistIds = if (isPinned) {
-                                                pinnedPlaylistIds - playlist.playlistId
-                                            } else {
-                                                pinnedPlaylistIds + playlist.playlistId
-                                            }
+                                            onTogglePinPlaylist(playlist.playlistId)
                                         },
                                     ),
                             ) {

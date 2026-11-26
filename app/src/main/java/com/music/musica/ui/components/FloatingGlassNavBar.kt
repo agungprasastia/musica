@@ -1,13 +1,9 @@
 package com.music.musica.ui.components
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,13 +24,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -45,26 +39,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.music.musica.playback.PlayerUiState
 import dev.chrisbanes.haze.HazeState
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -75,9 +64,6 @@ data class NavTabItem(
 )
 
 private val NAV_BAR_LIFT = 6.dp
-private val INLINE_GUTTER = 24.dp
-private val INLINE_SPACING = 12.dp
-private val INLINE_CIRCLE_SIZE = 48.dp
 
 /**
  * Pure scrub position calculation in tab-step coordinates with soft elastic edge resistance.
@@ -104,214 +90,6 @@ internal fun computeNavScrubPosition(
 internal fun computeNavLandedIndex(position: Float, tabCount: Int): Int {
     if (tabCount <= 0) return 0
     return position.roundToInt().coerceIn(0, tabCount - 1)
-}
-
-/**
- * Scroll connection driving iOS 26-style inline collapse:
- * - Scrolling down past [thresholdPx] folds the bottom chrome into a single compact inline row
- * - Scrolling back up past [thresholdPx] expands the full MiniPlayer + 5-tab capsule
- */
-@Stable
-class BottomChromeScrollConnection(
-    private val thresholdPx: Float,
-    var enabled: Boolean = true,
-) : NestedScrollConnection {
-    var isInline by mutableStateOf(false)
-        private set
-
-    private var accumulatedY = 0f
-
-    fun expand() {
-        isInline = false
-        accumulatedY = 0f
-    }
-
-    fun collapse() {
-        isInline = true
-        accumulatedY = 0f
-    }
-
-    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-        if (!enabled || thresholdPx <= 0f) return Offset.Zero
-        val dy = available.y
-        if ((accumulatedY > 0f && dy < 0f) || (accumulatedY < 0f && dy > 0f)) {
-            accumulatedY = 0f
-        }
-        accumulatedY += dy
-        if (accumulatedY <= -thresholdPx && !isInline) {
-            isInline = true
-            accumulatedY = 0f
-        } else if (accumulatedY >= thresholdPx && isInline) {
-            isInline = false
-            accumulatedY = 0f
-        }
-        return Offset.Zero
-    }
-}
-
-@Composable
-fun rememberBottomChromeScrollConnection(
-    threshold: Dp = 52.dp,
-): BottomChromeScrollConnection {
-    val thresholdPx = with(LocalDensity.current) { threshold.toPx() }
-    return remember(thresholdPx) { BottomChromeScrollConnection(thresholdPx) }
-}
-
-/**
- * Unified iOS 26-style floating Liquid Glass bottom chrome combining MiniPlayer + Nav Bar:
- * - Expanded: full-width 50dp MiniPlayer capsule docked 10dp above the 62dp 5-tab glass pill
- * - Inline (on scroll down): single centered 48dp row `[Active Tab Circle] [Compact MiniPlayer] [Search Circle]`
- */
-@Composable
-fun FloatingBottomChrome(
-    tabs: List<NavTabItem>,
-    selectedIndex: Int,
-    scrollConnection: BottomChromeScrollConnection,
-    playerState: PlayerUiState,
-    hazeState: HazeState,
-    frostedGlassEnabled: Boolean,
-    onSelectTab: (Int) -> Unit,
-    onActiveTabTap: (Int) -> Unit,
-    onExpandPlayer: () -> Unit,
-    onTogglePlayPause: () -> Unit,
-    onSkipNext: () -> Unit,
-    onSkipPrevious: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    if (tabs.isEmpty()) return
-    val hasMiniPlayer = playerState.currentSong != null
-    val haptics = LocalHapticFeedback.current
-    val contentColor = if (frostedGlassEnabled) glassContentColor() else MaterialTheme.colorScheme.onSurface
-    val safeSelected = selectedIndex.coerceIn(0, tabs.lastIndex)
-    val searchTabIndex = tabs.lastIndex
-
-    AnimatedContent(
-        targetState = scrollConnection.isInline,
-        transitionSpec = {
-            fadeIn(tween(210)) togetherWith fadeOut(tween(170))
-        },
-        contentAlignment = Alignment.BottomCenter,
-        modifier = modifier,
-        label = "floating_bottom_chrome_mode",
-    ) { inline ->
-        if (inline) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .windowInsetsPadding(floatingBarInsets)
-                    .padding(horizontal = INLINE_GUTTER)
-                    .padding(bottom = NAV_BAR_LIFT + 7.dp),
-                horizontalArrangement = if (hasMiniPlayer) {
-                    Arrangement.spacedBy(INLINE_SPACING)
-                } else {
-                    Arrangement.spacedBy(INLINE_SPACING, Alignment.CenterHorizontally)
-                },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // Active tab glass circle — tap to smoothly expand the full 5-tab bar
-                val activeTab = tabs[safeSelected]
-                Box(
-                    modifier = Modifier
-                        .size(INLINE_CIRCLE_SIZE)
-                        .shadow(
-                            elevation = 16.dp,
-                            shape = CircleShape,
-                            ambientColor = Color.Black.copy(alpha = 0.34f),
-                            spotColor = Color.Black.copy(alpha = 0.34f),
-                        )
-                        .frostedGlass(
-                            hazeState = hazeState,
-                            shape = CircleShape,
-                            enabled = frostedGlassEnabled,
-                        )
-                        .clickable {
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            scrollConnection.expand()
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = activeTab.icon,
-                        contentDescription = activeTab.label,
-                        tint = contentColor,
-                        modifier = Modifier.size(25.dp),
-                    )
-                }
-
-                if (hasMiniPlayer) {
-                    MiniPlayer(
-                        playerState = playerState,
-                        hazeState = hazeState,
-                        frostedGlassEnabled = frostedGlassEnabled,
-                        onExpand = onExpandPlayer,
-                        onTogglePlayPause = onTogglePlayPause,
-                        onSkipNext = onSkipNext,
-                        onSkipPrevious = onSkipPrevious,
-                        isInline = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-
-                // Standalone Search glass circle (Apple Music iOS 26 style)
-                val searchTab = tabs[searchTabIndex]
-                Box(
-                    modifier = Modifier
-                        .size(INLINE_CIRCLE_SIZE)
-                        .shadow(
-                            elevation = 16.dp,
-                            shape = CircleShape,
-                            ambientColor = Color.Black.copy(alpha = 0.34f),
-                            spotColor = Color.Black.copy(alpha = 0.34f),
-                        )
-                        .frostedGlass(
-                            hazeState = hazeState,
-                            shape = CircleShape,
-                            enabled = frostedGlassEnabled,
-                        )
-                        .clickable {
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            scrollConnection.expand()
-                            onSelectTab(searchTabIndex)
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = searchTab.icon,
-                        contentDescription = searchTab.label,
-                        tint = contentColor,
-                        modifier = Modifier.size(25.dp),
-                    )
-                }
-            }
-        } else {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                if (hasMiniPlayer) {
-                    MiniPlayer(
-                        playerState = playerState,
-                        hazeState = hazeState,
-                        frostedGlassEnabled = frostedGlassEnabled,
-                        onExpand = onExpandPlayer,
-                        onTogglePlayPause = onTogglePlayPause,
-                        onSkipNext = onSkipNext,
-                        onSkipPrevious = onSkipPrevious,
-                        isInline = false,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                }
-                FloatingGlassNavBar(
-                    tabs = tabs,
-                    selectedIndex = safeSelected,
-                    hazeState = hazeState,
-                    frostedGlassEnabled = frostedGlassEnabled,
-                    onSelectTab = onSelectTab,
-                    onActiveTabTap = onActiveTabTap,
-                )
-            }
-        }
-    }
 }
 
 /**

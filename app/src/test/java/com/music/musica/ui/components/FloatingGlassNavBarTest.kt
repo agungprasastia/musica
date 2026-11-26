@@ -1,9 +1,6 @@
 package com.music.musica.ui.components
 
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -68,31 +65,5 @@ class FloatingGlassNavBarTest {
         assertEquals(0f, computeNavScrubPosition(0f, 150f, 200f, 1), 0.0001f)
         assertEquals(0f, computeNavScrubPosition(0f, 150f, 0f, 5), 0.0001f)
         assertEquals(0, computeNavLandedIndex(3.2f, 0))
-    }
-
-    @Test
-    fun bottomChromeScrollConnectionCollapsesDownAndExpandsUp() {
-        val conn = BottomChromeScrollConnection(thresholdPx = 100f)
-        assertFalse(conn.isInline)
-
-        // Small downward scroll under threshold stays expanded
-        conn.onPreScroll(Offset(0f, -60f), NestedScrollSource.UserInput)
-        assertFalse(conn.isInline)
-
-        // Crossing threshold collapses inline
-        conn.onPreScroll(Offset(0f, -50f), NestedScrollSource.UserInput)
-        assertTrue(conn.isInline)
-
-        // Reversing direction upward past threshold expands back
-        conn.onPreScroll(Offset(0f, 60f), NestedScrollSource.UserInput)
-        assertTrue(conn.isInline)
-        conn.onPreScroll(Offset(0f, 50f), NestedScrollSource.UserInput)
-        assertFalse(conn.isInline)
-
-        // Explicit collapse + expand works deterministically
-        conn.collapse()
-        assertTrue(conn.isInline)
-        conn.expand()
-        assertFalse(conn.isInline)
     }
 }
