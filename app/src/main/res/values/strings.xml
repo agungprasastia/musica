@@ -34,6 +34,10 @@
     <string name="action_cancel">Cancel</string>
     <string name="action_done">Done</string>
     <string name="action_save">Save</string>
+    <string name="action_saved">Saved</string>
+    <string name="action_like">Like</string>
+    <string name="action_liked">Liked</string>
+    <string name="action_download">Download</string>
     <string name="action_delete">Delete</string>
     <string name="action_close">Close</string>
     <string name="action_clear">Clear</string>
@@ -179,9 +183,11 @@
     <string name="replay_top_songs">Top Songs</string>
     <string name="replay_top_artists">Top Artists</string>
     <string name="replay_plays_count">%1$d plays</string>
+    <string name="replay_card_stats">%1$d min · %2$d plays</string>
 
     <!-- Downloads -->
     <string name="downloads_title">Offline Downloads</string>
+    <string name="downloads_badge_offline">Offline</string>
     <string name="downloads_empty">No downloaded songs yet</string>
     <string name="downloads_empty_subtitle">Save tracks, albums, or playlists to listen offline anytime.</string>
     <string name="downloads_tab_tracks">Tracks</string>
@@ -246,7 +252,7 @@
     <string name="settings_lyrics_providers">Lyrics Providers</string>
 
     <string name="settings_clear_audio_cache">Clear Audio Cache</string>
-    <string name="settings_clear_image_cache">Clear Image Cache</string>
+    <string name="settings_clear_image_cache">Image Cache</string>
     <string name="settings_cache_cleared">Cache cleared</string>
 
     <string name="settings_app_language">App Language</string>

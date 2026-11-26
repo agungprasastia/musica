@@ -18,6 +18,7 @@ import com.music.musica.data.stream.StreamResolver
 import com.music.musica.playback.MusicaPlaybackService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -41,7 +42,7 @@ data class DownloadedTrackItem(
  * Coordinates durable foreground offline downloads through Media3's [MusicaDownloadService]
  * and [DownloadManager], mirroring live state transitions and byte progress into Room.
  */
-@OptIn(UnstableApi::class)
+@OptIn(UnstableApi::class, ExperimentalCoroutinesApi::class)
 class DownloadRepository(
     private val appContext: Context,
     private val db: MusicaDatabase,
@@ -51,10 +52,13 @@ class DownloadRepository(
     private val downloadManagerProvider: () -> DownloadManager,
     private val downloadQualityKbpsProvider: () -> Int = { 256 },
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // Single-threaded serialized DB dispatcher guarantees monotonic state transitions in Room
+    // (a delayed 98% ticker write can never regress a COMPLETED download or resurrect a deleted row).
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
     private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val coordinator = DownloadQueueCoordinator()
     private val collectionMeta = ConcurrentHashMap<String, Pair<String?, String?>>()
+    private val removedIds = ConcurrentHashMap.newKeySet<String>()
 
     @Volatile
     private var managerAttached = false
@@ -83,6 +87,11 @@ class DownloadRepository(
     }
 
     private val downloadListener = object : DownloadManager.Listener {
+        override fun onInitialized(downloadManager: DownloadManager) {
+            reconcileFromManager(downloadManager)
+            ensureProgressTicker(downloadManager)
+        }
+
         override fun onDownloadChanged(
             downloadManager: DownloadManager,
             download: Download,
@@ -97,6 +106,7 @@ class DownloadRepository(
 
         override fun onDownloadRemoved(downloadManager: DownloadManager, download: Download) {
             val videoId = download.request.id
+            removedIds.add(videoId)
             coordinator.remove(videoId)
             collectionMeta.remove(videoId)
             cacheProvider.removeDownload(videoId)
@@ -129,7 +139,15 @@ class DownloadRepository(
         song: Song,
         collectionId: String? = null,
         collectionTitle: String? = null,
+    ) = enqueueDownloadInternal(song, collectionId, collectionTitle, forceRequeue = false)
+
+    private fun enqueueDownloadInternal(
+        song: Song,
+        collectionId: String?,
+        collectionTitle: String?,
+        forceRequeue: Boolean,
     ) {
+        removedIds.remove(song.videoId)
         if (!collectionId.isNullOrBlank()) {
             collectionMeta[song.videoId] = collectionId to collectionTitle
         }
@@ -141,6 +159,25 @@ class DownloadRepository(
                 val resolvedColTitle = collectionTitle ?: existing?.collectionTitle ?: collectionMeta[song.videoId]?.second
                 if (!resolvedColId.isNullOrBlank()) {
                     collectionMeta[song.videoId] = resolvedColId to resolvedColTitle
+                }
+
+                // Skip re-queueing tracks already completed (with valid cache) or actively queued/downloading
+                if (!forceRequeue && existing != null) {
+                    val alreadyCompleted = existing.downloadState == DownloadState.COMPLETED &&
+                        cacheProvider.isDownloadCompleted(song.videoId)
+                    val alreadyActive = existing.downloadState == DownloadState.QUEUED ||
+                        existing.downloadState == DownloadState.DOWNLOADING
+                    if (alreadyCompleted || alreadyActive) {
+                        if (existing.collectionId.isNullOrBlank() && !resolvedColId.isNullOrBlank()) {
+                            db.downloadDao().upsert(
+                                existing.copy(
+                                    collectionId = resolvedColId,
+                                    collectionTitle = resolvedColTitle,
+                                ),
+                            )
+                        }
+                        return@launch
+                    }
                 }
 
                 coordinator.enqueue(song.videoId, resolvedColId, resolvedColTitle)
@@ -174,6 +211,7 @@ class DownloadRepository(
                     }.onFailure { err ->
                         Log.w(TAG, "Service add fallback for ${song.videoId}: ${err.message}")
                         manager?.addDownload(request)
+                        manager?.resumeDownloads()
                     }
                 }
             }.onFailure { err ->
@@ -191,6 +229,7 @@ class DownloadRepository(
     }
 
     fun retryDownload(song: Song) {
+        removedIds.remove(song.videoId)
         scope.launch {
             val existing = runCatching { db.downloadDao().get(song.videoId) }.getOrNull()
             val colId = existing?.collectionId ?: collectionMeta[song.videoId]?.first
@@ -198,18 +237,16 @@ class DownloadRepository(
             streamResolver.invalidate(song.videoId)
             cacheProvider.removeDownload(song.videoId)
             coordinator.retry(song.videoId)
-
-            mainScope.launch {
-                val manager = attachDownloadManagerIfNeeded()
-                runCatching { manager?.removeDownload(song.videoId) }
-                downloadSong(song, colId, colTitle)
-            }
+            // Do NOT call manager.removeDownload() before addDownload: Media3's mergeRequest
+            // natively resets STATE_FAILED -> STATE_QUEUED without firing a racy onDownloadRemoved.
+            enqueueDownloadInternal(song, colId, colTitle, forceRequeue = true)
         }
     }
 
     fun cancelDownload(videoId: String) = removeDownload(videoId)
 
     fun removeDownload(videoId: String) {
+        removedIds.add(videoId)
         coordinator.remove(videoId)
         collectionMeta.remove(videoId)
         mainScope.launch {
@@ -236,8 +273,13 @@ class DownloadRepository(
         if (!managerAttached) {
             managerAttached = true
             manager.addListener(downloadListener)
-            reconcileFromManager(manager)
-            ensureProgressTicker(manager)
+            // Media3 loads persisted downloads asynchronously via MSG_INITIALIZE.
+            // Reconciling before isInitialized would see an empty list and mark every
+            // queued/waiting-for-Wi-Fi download FAILED; wait for onInitialized() instead.
+            if (manager.isInitialized) {
+                reconcileFromManager(manager)
+                ensureProgressTicker(manager)
+            }
         }
         return manager
     }
@@ -331,7 +373,14 @@ class DownloadRepository(
 
         scope.launch {
             runCatching {
+                if (videoId in removedIds) return@launch
                 val existing = db.downloadDao().get(videoId)
+                // Never regress a COMPLETED track back to QUEUED/DOWNLOADING from a late progress tick
+                if (existing?.downloadState == DownloadState.COMPLETED &&
+                    (state == DownloadState.QUEUED || state == DownloadState.DOWNLOADING)
+                ) {
+                    return@launch
+                }
                 val meta = collectionMeta[videoId]
                 db.downloadDao().upsert(
                     DownloadEntity(

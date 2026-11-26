@@ -31,7 +31,9 @@ internal object BotGuardCodec {
         val interpreterHash = challengeData[3].jsonPrimitive.content
         val program = challengeData[4].jsonPrimitive.content
         val globalName = challengeData[5].jsonPrimitive.content
-        val clientExperimentsStateBlob = challengeData[7].jsonPrimitive.content
+        val clientExperimentsStateBlob = challengeData.getOrNull(7)
+            ?.takeIf { it !is JsonNull }
+            ?.jsonPrimitive?.content.orEmpty()
 
         val safeScript = challengeData[1]
             .takeIf { it !is JsonNull }

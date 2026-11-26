@@ -64,7 +64,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -113,12 +115,18 @@ fun ArtworkImage(
         else -> 544
     }
     val decodePx = with(density) { size.roundToPx().coerceAtLeast(64) }
-    val model = androidx.compose.runtime.remember(url, requestPx, decodePx) {
-        if (url.isNullOrBlank()) {
+    var useRawFallback by remember(url) { mutableStateOf(false) }
+    val resolvedUrl = remember(url, requestPx, useRawFallback) {
+        if (url.isNullOrBlank()) null
+        else if (useRawFallback) url
+        else upsizeArtworkUrl(url, requestPx)
+    }
+    val model = remember(resolvedUrl, decodePx) {
+        if (resolvedUrl.isNullOrBlank()) {
             null
         } else {
             coil3.request.ImageRequest.Builder(context)
-                .data(upsizeArtworkUrl(url, requestPx))
+                .data(resolvedUrl)
                 .size(decodePx)
                 .build()
         }
@@ -142,6 +150,11 @@ fun ArtworkImage(
                 model = model,
                 contentDescription = contentDescription,
                 contentScale = ContentScale.Crop,
+                onError = {
+                    if (!useRawFallback && resolvedUrl != url) {
+                        useRawFallback = true
+                    }
+                },
                 modifier = Modifier.matchParentSize(),
             )
         }
@@ -904,14 +917,14 @@ fun SongActionsSheet(
             ) {
                 QuickActionTile(
                     icon = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                    label = stringResource(if (isLiked) R.string.menu_unlike else R.string.menu_like).substringBefore(" "),
+                    label = stringResource(if (isLiked) R.string.action_liked else R.string.action_like),
                     tint = if (isLiked) MusicaAccentRed else fg,
                     onClick = { onToggleLike(); onDismiss() },
                     modifier = Modifier.weight(1f),
                 )
                 QuickActionTile(
                     icon = if (isDownloaded) Icons.Rounded.DeleteOutline else Icons.Rounded.Download,
-                    label = stringResource(if (isDownloaded) R.string.action_delete else R.string.library_downloads),
+                    label = stringResource(if (isDownloaded) R.string.action_delete else R.string.action_download),
                     tint = fg,
                     onClick = { onToggleDownload(); onDismiss() },
                     modifier = Modifier.weight(1f),

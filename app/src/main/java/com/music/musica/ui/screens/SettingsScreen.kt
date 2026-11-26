@@ -56,12 +56,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -233,9 +236,10 @@ fun SettingsScreen(
             }
         }
 
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = bottomPadding + 32.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = bottomPadding + 32.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             // 1. Account
@@ -271,6 +275,9 @@ fun SettingsScreen(
             if (matches("playback", "pemutaran", "crossfade", "silence", "hening", "autoplay", "equalizer", "eq")) {
                 item(key = "sec_playback") {
                     SettingsGroup(title = stringResource(R.string.settings_section_playback)) {
+                        var draftCrossfade by remember(settings.crossfadeSeconds) {
+                            mutableIntStateOf(settings.crossfadeSeconds)
+                        }
                         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -288,10 +295,10 @@ fun SettingsScreen(
                                     Text(stringResource(R.string.settings_crossfade), style = MaterialTheme.typography.bodyLarge)
                                 }
                                 Text(
-                                    text = if (settings.crossfadeSeconds == 0) {
+                                    text = if (draftCrossfade == 0) {
                                         stringResource(R.string.settings_crossfade_off)
                                     } else {
-                                        stringResource(R.string.settings_crossfade_seconds, settings.crossfadeSeconds)
+                                        stringResource(R.string.settings_crossfade_seconds, draftCrossfade)
                                     },
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                                     color = MaterialTheme.colorScheme.primary,
@@ -299,8 +306,13 @@ fun SettingsScreen(
                             }
                             Spacer(Modifier.height(6.dp))
                             ThinSlider(
-                                value = settings.crossfadeSeconds.toFloat(),
-                                onValueChange = { onSetCrossfade(it.roundToInt()) },
+                                value = draftCrossfade.toFloat(),
+                                onValueChange = { draftCrossfade = it.roundToInt().coerceIn(0, 12) },
+                                onValueChangeFinished = {
+                                    if (draftCrossfade != settings.crossfadeSeconds) {
+                                        onSetCrossfade(draftCrossfade)
+                                    }
+                                },
                                 valueRange = 0f..12f,
                                 activeColor = MaterialTheme.colorScheme.primary,
                                 inactiveColor = MaterialTheme.colorScheme.outline,
@@ -527,6 +539,9 @@ fun SettingsScreen(
                             onCheckedChange = onSetWifiOnlyDownloads,
                         )
                         GroupDivider()
+                        var draftCacheLimitMb by remember(settings.audioCacheLimitMb) {
+                            mutableIntStateOf(settings.audioCacheLimitMb)
+                        }
                         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -544,10 +559,10 @@ fun SettingsScreen(
                                     Text(stringResource(R.string.settings_cache_limit), style = MaterialTheme.typography.bodyLarge)
                                 }
                                 Text(
-                                    text = if (settings.audioCacheLimitMb >= 1024) {
-                                        "%.1f GB".format(settings.audioCacheLimitMb / 1024f)
+                                    text = if (draftCacheLimitMb >= 1024) {
+                                        "%.1f GB".format(draftCacheLimitMb / 1024f)
                                     } else {
-                                        "${settings.audioCacheLimitMb} MB"
+                                        "$draftCacheLimitMb MB"
                                     },
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                                     color = MaterialTheme.colorScheme.primary,
@@ -555,10 +570,14 @@ fun SettingsScreen(
                             }
                             Spacer(Modifier.height(6.dp))
                             ThinSlider(
-                                value = settings.audioCacheLimitMb.toFloat(),
+                                value = draftCacheLimitMb.toFloat(),
                                 onValueChange = { raw ->
-                                    val snapped = ((raw / 128f).roundToInt() * 128).coerceIn(128, 4096)
-                                    onSetAudioCacheLimitMb(snapped)
+                                    draftCacheLimitMb = ((raw / 128f).roundToInt() * 128).coerceIn(128, 4096)
+                                },
+                                onValueChangeFinished = {
+                                    if (draftCacheLimitMb != settings.audioCacheLimitMb) {
+                                        onSetAudioCacheLimitMb(draftCacheLimitMb)
+                                    }
                                 },
                                 valueRange = 128f..4096f,
                                 activeColor = MaterialTheme.colorScheme.primary,
@@ -651,6 +670,21 @@ fun SettingsScreen(
                     }
                 }
             }
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(14.dp)
+                .align(Alignment.TopCenter)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.background,
+                            Color.Transparent,
+                        ),
+                    ),
+                ),
+        )
         }
     }
 

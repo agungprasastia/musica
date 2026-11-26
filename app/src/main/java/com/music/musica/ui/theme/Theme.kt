@@ -84,7 +84,9 @@ fun DarkStatusBarEffect(enabled: Boolean) {
         SideEffect {
             val window = (view.context as? Activity)?.window ?: return@SideEffect
             val insets = WindowCompat.getInsetsController(window, view)
-            insets.isAppearanceLightStatusBars = if (enabled) false else !isDark
+            val useLightIcons = if (enabled) false else !isDark
+            insets.isAppearanceLightStatusBars = useLightIcons
+            insets.isAppearanceLightNavigationBars = useLightIcons
         }
     }
 }

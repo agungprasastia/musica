@@ -19,6 +19,7 @@ class DynamicLruCacheEvictor(
     private val headBudgetBytes: Long = DEFAULT_HEAD_BUDGET_BYTES,
 ) : CacheEvictor {
 
+    private val lock = Any()
     private val leastRecentlyUsed = TreeSet<CacheSpan>(::compareSpans)
     private val protectedHeads = TreeSet<CacheSpan>(::compareSpans)
     private var protectedSize = 0L
@@ -37,24 +38,28 @@ class DynamicLruCacheEvictor(
     }
 
     override fun onSpanAdded(cache: Cache, span: CacheSpan) {
-        val effectiveHeadBudget = headBudgetBytes.coerceAtMost(maxBytes / 4L)
-        if (isHead(span) && protectedSize + span.length <= effectiveHeadBudget) {
-            protectedHeads.add(span)
-            protectedSize += span.length
-        } else {
-            leastRecentlyUsed.add(span)
+        synchronized(lock) {
+            val effectiveHeadBudget = headBudgetBytes.coerceAtMost(maxBytes / 4L)
+            if (isHead(span) && protectedSize + span.length <= effectiveHeadBudget) {
+                protectedHeads.add(span)
+                protectedSize += span.length
+            } else {
+                leastRecentlyUsed.add(span)
+            }
+            currentSize += span.length
         }
-        currentSize += span.length
         evictCache(cache, 0L)
     }
 
     override fun onSpanRemoved(cache: Cache, span: CacheSpan) {
-        if (protectedHeads.remove(span)) {
-            protectedSize -= span.length
-        } else {
-            leastRecentlyUsed.remove(span)
+        synchronized(lock) {
+            if (protectedHeads.remove(span)) {
+                protectedSize = (protectedSize - span.length).coerceAtLeast(0L)
+            } else {
+                leastRecentlyUsed.remove(span)
+            }
+            currentSize = (currentSize - span.length).coerceAtLeast(0L)
         }
-        currentSize = (currentSize - span.length).coerceAtLeast(0L)
     }
 
     override fun onSpanTouched(cache: Cache, oldSpan: CacheSpan, newSpan: CacheSpan) {
@@ -69,14 +74,33 @@ class DynamicLruCacheEvictor(
 
     private fun evictCache(cache: Cache, requiredSpace: Long) {
         val limit = maxBytes.coerceAtLeast(0L)
-        while (currentSize + requiredSpace > limit) {
-            if (leastRecentlyUsed.isNotEmpty()) {
-                cache.removeSpan(leastRecentlyUsed.first())
-                continue
+        var maxIterations = 2_048
+        while (maxIterations-- > 0) {
+            val candidate: CacheSpan = synchronized(lock) {
+                if (currentSize + requiredSpace <= limit) return
+                if (leastRecentlyUsed.isNotEmpty()) {
+                    leastRecentlyUsed.first()
+                } else {
+                    val oldestHead = protectedHeads.pollFirst() ?: return
+                    protectedSize = (protectedSize - oldestHead.length).coerceAtLeast(0L)
+                    leastRecentlyUsed.add(oldestHead)
+                    oldestHead
+                }
             }
-            val oldestHead = protectedHeads.pollFirst() ?: return
-            protectedSize = (protectedSize - oldestHead.length).coerceAtLeast(0L)
-            leastRecentlyUsed.add(oldestHead)
+            val sizeBefore = synchronized(lock) { currentSize }
+            cache.removeSpan(candidate)
+            val progressed = synchronized(lock) {
+                if (currentSize < sizeBefore) {
+                    true
+                } else {
+                    // Guard against zero-progress loops if SimpleCache skipped removing a locked/missing span
+                    leastRecentlyUsed.remove(candidate)
+                    false
+                }
+            }
+            if (!progressed && synchronized(lock) { leastRecentlyUsed.isEmpty() && protectedHeads.isEmpty() }) {
+                return
+            }
         }
     }
 

@@ -171,10 +171,12 @@ object ExploreAndMixesOrganizer {
 
         val mergedStations = (personalized.stations + curated.stations)
             .distinctBy { it.id }
+            .distinctBy { it.title.trim().lowercase() }
             .take(6)
         val stationIds = mergedStations.mapTo(mutableSetOf()) { it.id }
+        val stationTitles = mergedStations.mapTo(mutableSetOf()) { it.title.trim().lowercase() }
         val mergedFeatured = curated.featured
-            .filter { it.id !in stationIds }
+            .filter { it.id !in stationIds && it.title.trim().lowercase() !in stationTitles }
             .ifEmpty { curated.featured }
             .take(10)
 
@@ -222,14 +224,17 @@ object ExploreAndMixesOrganizer {
 
         val stationCandidates = (mixPreferred + playlistAndAlbumPool + trackPool)
             .distinctBy { it.id }
+            .distinctBy { it.title.trim().lowercase() }
 
         val stations = stationCandidates.take(6)
         val stationIds = stations.mapTo(mutableSetOf()) { it.id }
+        val stationTitles = stations.mapTo(mutableSetOf()) { it.title.trim().lowercase() }
 
         val featureCandidates = (playlistAndAlbumPool + mixPreferred + trackPool)
             .distinctBy { it.id }
+            .distinctBy { it.title.trim().lowercase() }
         val featured = featureCandidates
-            .filter { it.id !in stationIds }
+            .filter { it.id !in stationIds && it.title.trim().lowercase() !in stationTitles }
             .ifEmpty { featureCandidates }
             .take(10)
 

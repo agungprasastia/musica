@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import coil3.SingletonImageLoader
 import com.music.musica.MusicaApplication
 import com.music.musica.core.auth.GoogleSession
+import com.music.musica.core.model.AlbumRef
 import com.music.musica.core.model.AppLanguage
 import com.music.musica.core.model.AudioQuality
 import com.music.musica.core.model.BrowseType
@@ -122,13 +123,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _searchLoadingMore = MutableStateFlow(false)
     val searchLoadingMore: StateFlow<Boolean> = _searchLoadingMore.asStateFlow()
     private var searchContinuation: String? = null
+    private var failedSearchContinuation: String? = null
     private var searchJob: Job? = null
+    private var searchLoadMoreJob: Job? = null
 
     // ---- Detail Stack + Surviving AppNavigator ----
     private val _detailStack = MutableStateFlow<List<DetailStackEntry>>(emptyList())
     val detailStack: StateFlow<List<DetailStackEntry>> = _detailStack.asStateFlow()
     private val _detailLoadingMore = MutableStateFlow(false)
     val detailLoadingMore: StateFlow<Boolean> = _detailLoadingMore.asStateFlow()
+    private var detailLoadMoreJob: Job? = null
+    private val failedDetailContinuations = mutableSetOf<String>()
 
     val navigator: AppNavigator = AppNavigator(
         detailDepth = { _detailStack.value.size },
@@ -336,7 +341,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // Editing the query returns cleanly to live suggestions instead of showing stale results
         if (_searchResults.value != null) {
             searchJob?.cancel()
+            searchLoadMoreJob?.cancel()
             searchContinuation = null
+            failedSearchContinuation = null
             _searchHasMore.value = false
             _searchLoadingMore.value = false
             _searchResults.value = null
@@ -350,9 +357,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _searchFilter.value = filter
         _searchResults.value = UiState.Loading
         searchContinuation = null
+        failedSearchContinuation = null
         _searchHasMore.value = false
         _searchLoadingMore.value = false
         searchJob?.cancel()
+        searchLoadMoreJob?.cancel()
         searchJob = viewModelScope.launch {
             container.libraryRepository.recordSearchQuery(clean)
             container.ytMusicRepository.search(clean, filter)
@@ -366,25 +375,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun loadMoreSearch() {
-        val token = searchContinuation?.takeIf { it.isNotBlank() } ?: return
+        val token = searchContinuation?.takeIf { it.isNotBlank() && it != failedSearchContinuation } ?: return
         if (_searchLoadingMore.value) return
         val currentQuery = _searchQuery.value
         val currentFilter = _searchFilter.value
         _searchLoadingMore.value = true
-        viewModelScope.launch {
-            container.ytMusicRepository.search(currentQuery, currentFilter, continuation = token)
-                .onSuccess { page ->
-                    if (_searchQuery.value != currentQuery || _searchFilter.value != currentFilter) return@onSuccess
-                    searchContinuation = page.continuation
-                    _searchHasMore.value = !page.continuation.isNullOrBlank()
-                    val existing = (_searchResults.value as? UiState.Success)?.data.orEmpty()
-                    val seen = existing.map { it.id + it::class.simpleName }.toHashSet()
-                    val fresh = page.items.filter { seen.add(it.id + it::class.simpleName) }
-                    if (fresh.isNotEmpty()) {
-                        _searchResults.value = UiState.Success(existing + fresh)
+        searchLoadMoreJob?.cancel()
+        searchLoadMoreJob = viewModelScope.launch {
+            try {
+                container.ytMusicRepository.search(currentQuery, currentFilter, continuation = token)
+                    .onSuccess { page ->
+                        if (_searchQuery.value != currentQuery || _searchFilter.value != currentFilter) return@onSuccess
+                        val existing = (_searchResults.value as? UiState.Success)?.data.orEmpty()
+                        val seen = existing.map { it.id + it::class.simpleName }.toHashSet()
+                        val fresh = page.items.filter { seen.add(it.id + it::class.simpleName) }
+                        if (fresh.isNotEmpty()) {
+                            _searchResults.value = UiState.Success(existing + fresh)
+                        }
+                        val nextToken = page.continuation?.takeIf { it.isNotBlank() && it != token && fresh.isNotEmpty() }
+                        searchContinuation = nextToken
+                        _searchHasMore.value = nextToken != null
                     }
-                }
-            _searchLoadingMore.value = false
+                    .onFailure {
+                        failedSearchContinuation = token
+                        _searchHasMore.value = false
+                    }
+            } finally {
+                _searchLoadingMore.value = false
+            }
         }
     }
 
@@ -406,6 +424,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // ---- Detail navigation ----
 
     fun openDetail(browseId: String, params: String? = null) {
+        detailLoadMoreJob?.cancel()
+        _detailLoadingMore.value = false
         val entry = DetailStackEntry(browseId = browseId, params = params, isLocalPlaylist = false, state = UiState.Loading)
         _detailStack.update { it + entry }
         fetchDetailForTop(browseId, params, isLocal = false, forceRefresh = false)
@@ -417,12 +437,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             openDetail(browseId)
             return
         }
+        detailLoadMoreJob?.cancel()
+        _detailLoadingMore.value = false
         val entry = DetailStackEntry(browseId = playlist.playlistId, isLocalPlaylist = true, state = UiState.Loading)
         _detailStack.update { it + entry }
         fetchDetailForTop(playlist.playlistId, null, isLocal = true, forceRefresh = true)
     }
 
     fun retryTopDetail() {
+        detailLoadMoreJob?.cancel()
+        _detailLoadingMore.value = false
+        failedDetailContinuations.clear()
         val top = _detailStack.value.lastOrNull() ?: return
         fetchDetailForTop(top.browseId, top.params, top.isLocalPlaylist, forceRefresh = true)
     }
@@ -432,37 +457,68 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val top = _detailStack.value.lastOrNull() ?: return
         if (top.isLocalPlaylist) return
         val currentPage = (top.state as? UiState.Success)?.data ?: return
-        val token = currentPage.continuation?.takeIf { it.isNotBlank() } ?: return
+        val token = currentPage.continuation?.takeIf { it.isNotBlank() && it !in failedDetailContinuations } ?: return
 
         _detailLoadingMore.value = true
-        viewModelScope.launch {
-            container.ytMusicRepository.loadDetailContinuation(top.browseId, token)
-                .onSuccess { (moreTracks, nextToken) ->
-                    _detailStack.update { stack ->
-                        stack.map { entry ->
-                            if (entry.browseId == top.browseId && entry.params == top.params) {
-                                val latest = (entry.state as? UiState.Success)?.data ?: return@map entry
-                                val seenIds = latest.tracks.map { it.videoId }.toHashSet()
-                                val fresh = moreTracks.filter { seenIds.add(it.videoId) }
-                                entry.copy(
-                                    state = UiState.Success(
-                                        latest.copy(
-                                            tracks = latest.tracks + fresh,
-                                            continuation = nextToken,
+        val fallbackAlbum = if (currentPage.type == BrowseType.ALBUM && currentPage.title.isNotBlank()) {
+            AlbumRef(currentPage.title, currentPage.browseId)
+        } else {
+            null
+        }
+        detailLoadMoreJob?.cancel()
+        detailLoadMoreJob = viewModelScope.launch {
+            try {
+                container.ytMusicRepository.loadDetailContinuation(
+                    browseId = top.browseId,
+                    continuation = token,
+                    fallbackCover = currentPage.thumbnailUrl,
+                    fallbackAlbum = fallbackAlbum,
+                    fallbackArtist = currentPage.artist,
+                )
+                    .onSuccess { (moreTracks, nextToken) ->
+                        _detailStack.update { stack ->
+                            stack.map { entry ->
+                                if (entry.browseId == top.browseId && entry.params == top.params) {
+                                    val latest = (entry.state as? UiState.Success)?.data ?: return@map entry
+                                    val seenIds = latest.tracks.map { it.videoId }.toHashSet()
+                                    val fresh = moreTracks.filter { seenIds.add(it.videoId) }
+                                    val effectiveNext = nextToken?.takeIf {
+                                        it.isNotBlank() && it != token && fresh.isNotEmpty()
+                                    }
+                                    entry.copy(
+                                        state = UiState.Success(
+                                            latest.copy(
+                                                tracks = latest.tracks + fresh,
+                                                continuation = effectiveNext,
+                                            ),
                                         ),
-                                    ),
-                                )
-                            } else entry
+                                    )
+                                } else entry
+                            }
                         }
                     }
-                }
-            _detailLoadingMore.value = false
+                    .onFailure {
+                        failedDetailContinuations += token
+                        _detailStack.update { stack ->
+                            stack.map { entry ->
+                                if (entry.browseId == top.browseId && entry.params == top.params) {
+                                    val latest = (entry.state as? UiState.Success)?.data ?: return@map entry
+                                    entry.copy(state = UiState.Success(latest.copy(continuation = null)))
+                                } else entry
+                            }
+                        }
+                    }
+            } finally {
+                _detailLoadingMore.value = false
+            }
         }
     }
 
     fun popDetail(): Boolean {
         val current = _detailStack.value
         if (current.isEmpty()) return false
+        detailLoadMoreJob?.cancel()
+        _detailLoadingMore.value = false
         val next = current.dropLast(1)
         _detailStack.value = next
         navigator.onDetailStackShrunk(next.size)
@@ -470,6 +526,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearDetails() {
+        detailLoadMoreJob?.cancel()
+        _detailLoadingMore.value = false
         _detailStack.value = emptyList()
         navigator.onDetailStackShrunk(0)
     }
@@ -597,11 +655,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun renamePlaylist(playlistId: String, newTitle: String) {
-        viewModelScope.launch { container.libraryRepository.renamePlaylist(playlistId, newTitle) }
+        viewModelScope.launch {
+            val clean = newTitle.trim()
+            if (clean.isEmpty()) return@launch
+            container.libraryRepository.renamePlaylist(playlistId, clean)
+            container.ytMusicRepository.invalidateDetail(playlistId)
+            val cleanId = playlistId.removePrefix("VL")
+            _detailStack.update { stack ->
+                stack.map { entry ->
+                    if (entry.browseId.removePrefix("VL") == cleanId) {
+                        val page = (entry.state as? UiState.Success)?.data
+                        if (page != null) entry.copy(state = UiState.Success(page.copy(title = clean))) else entry
+                    } else entry
+                }
+            }
+            if (container.authStore.isSignedIn) {
+                container.ytMusicRepository.loadRemoteLibrary().onSuccess { _remoteLibrary.value = it }
+            }
+        }
     }
 
     fun deletePlaylist(playlistId: String) {
-        viewModelScope.launch { container.libraryRepository.deletePlaylist(playlistId) }
+        viewModelScope.launch {
+            container.libraryRepository.deletePlaylist(playlistId)
+            container.ytMusicRepository.invalidateDetail(playlistId)
+            val cleanId = playlistId.removePrefix("VL")
+            val filtered = _detailStack.value.filterNot { it.browseId.removePrefix("VL") == cleanId }
+            if (filtered.size != _detailStack.value.size) {
+                _detailStack.value = filtered
+                navigator.onDetailStackShrunk(filtered.size)
+            }
+            if (container.authStore.isSignedIn) {
+                container.ytMusicRepository.loadRemoteLibrary().onSuccess { _remoteLibrary.value = it }
+            }
+        }
     }
 
     fun removeSongFromPlaylist(playlistId: String, song: Song) {
@@ -653,10 +740,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun queueBrowseTarget(target: BrowseActionTarget, playNext: Boolean) {
         viewModelScope.launch {
             val tracks = resolveTracksForTarget(target)
+            if (tracks.isEmpty()) return@launch
             if (playNext) {
-                tracks.asReversed().forEach { container.playerController.playNext(it) }
+                container.playerController.playNextAll(tracks)
             } else {
-                tracks.forEach { container.playerController.addToQueue(it) }
+                container.playerController.addAllToQueue(tracks)
             }
         }
     }

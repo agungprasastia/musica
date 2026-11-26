@@ -15,9 +15,15 @@ class InnertubeParsersTest {
     private val json = Json { ignoreUnknownKeys = true }
 
     @Test
-    fun parseDurationMs_handlesMinutesSecondsHoursAndInvalid() {
+    fun parseDurationMs_handlesMinutesSecondsHoursDotsAndInvalid() {
         assertEquals(225_000L, InnertubeParsers.parseDurationMs("3:45"))
+        assertEquals(213_000L, InnertubeParsers.parseDurationMs("3.33"))
+        assertEquals(605_000L, InnertubeParsers.parseDurationMs("10.05"))
         assertEquals(3_723_000L, InnertubeParsers.parseDurationMs("1:02:03"))
+        assertEquals(3_723_000L, InnertubeParsers.parseDurationMs("1.02.03"))
+        assertEquals(0L, InnertubeParsers.parseDurationMs("3.99"))
+        assertEquals(0L, InnertubeParsers.parseDurationMs("2024"))
+        assertEquals(0L, InnertubeParsers.parseDurationMs("1.2"))
         assertEquals(0L, InnertubeParsers.parseDurationMs(null))
         assertEquals(0L, InnertubeParsers.parseDurationMs("Live"))
     }
@@ -383,5 +389,128 @@ class InnertubeParsersTest {
         assertEquals(1, artist.sections.size)
         assertEquals("MPADUC_klara", artist.sections[0].browseId)
         assertEquals("ALBUMS_PARAM_1", artist.sections[0].params)
+    }
+
+    @Test
+    fun parseSearchPage_indonesianDotDurationInheritsTopResultArtistAndIgnoresReloadContinuation() {
+        val raw = """
+        {
+          "contents": {
+            "tabbedSearchResultsRenderer": {
+              "tabs": [{
+                "tabRenderer": {
+                  "content": {
+                    "sectionListRenderer": {
+                      "contents": [
+                        {
+                          "musicCardShelfRenderer": {
+                            "title": { "runs": [{ "text": "Tulus" }] },
+                            "subtitle": { "runs": [{ "text": "Artis" }] },
+                            "onTap": {
+                              "browseEndpoint": {
+                                "browseId": "UC_tulus",
+                                "browseEndpointContextSupportedConfigs": {
+                                  "browseEndpointContextMusicConfig": { "pageType": "MUSIC_PAGE_TYPE_ARTIST" }
+                                }
+                              }
+                            },
+                            "contents": [
+                              {
+                                "musicResponsiveListItemRenderer": {
+                                  "playlistItemData": { "videoId": "vid_monokrom" },
+                                  "flexColumns": [
+                                    { "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": "Monokrom" }] } } },
+                                    { "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [
+                                      { "text": "Lagu" },
+                                      { "text": " • " },
+                                      { "text": "3.33" }
+                                    ] } } }
+                                  ]
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "musicShelfRenderer": {
+                            "contents": [],
+                            "continuations": [{ "reloadContinuationData": { "continuation": "SHOULD_IGNORE_RELOAD" } }]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }]
+            }
+          }
+        }
+        """.trimIndent()
+
+        val page = InnertubeParsers.parseSearchPage(json.parseToJsonElement(raw).jsonObject)
+        assertEquals(2, page.items.size)
+        assertNull(page.continuation)
+        val song = (page.items[1] as ShelfItem.Track).song
+        assertEquals("Monokrom", song.title)
+        assertEquals("Tulus", song.artistText)
+        assertEquals("UC_tulus", song.primaryArtistId)
+        assertEquals(213_000L, song.durationMs)
+    }
+
+    @Test
+    fun parseDetailPage_extractsAudioPlaylistIdAndInlineContinuation() {
+        val raw = """
+        {
+          "header": {
+            "musicResponsiveHeaderRenderer": {
+              "title": { "runs": [{ "text": "Manusia" }] },
+              "buttons": [{
+                "musicPlayButtonRenderer": {
+                  "playNavigationEndpoint": {
+                    "watchPlaylistEndpoint": { "playlistId": "OLAK5uy_manusia123" }
+                  }
+                }
+              }]
+            }
+          },
+          "contents": {
+            "twoColumnBrowseResultsRenderer": {
+              "secondaryContents": {
+                "sectionListRenderer": {
+                  "contents": [{
+                    "musicPlaylistShelfRenderer": {
+                      "contents": [
+                        {
+                          "continuationItemRenderer": {
+                            "continuationEndpoint": {
+                              "continuationCommand": { "token": "INLINE_CONT_2" }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }]
+                }
+              }
+            }
+          }
+        }
+        """.trimIndent()
+        val detail = InnertubeParsers.parseDetailPage("MPREb_manusia", json.parseToJsonElement(raw).jsonObject)
+        assertEquals("OLAK5uy_manusia123", detail.audioPlaylistId)
+        assertEquals("INLINE_CONT_2", detail.continuation)
+    }
+
+    @Test
+    fun upsizeArtworkUrl_preservesSignedUrlsAndResizesPlainGoogleUrls() {
+        val plain = "https://lh3.googleusercontent.com/abc=w120-h120-l90-rj"
+        assertEquals(
+            "https://lh3.googleusercontent.com/abc=w544-h544-l90-rj",
+            com.music.musica.core.model.upsizeArtworkUrl(plain, 544),
+        )
+        val signedQuery = "https://lh3.googleusercontent.com/xyz=w226-h226-l90-rj?sqp=123&rs=456"
+        assertEquals(signedQuery, com.music.musica.core.model.upsizeArtworkUrl(signedQuery, 544))
+        val signedDashS = "https://lh3.googleusercontent.com/xyz=w226-h226-s-l90-rj"
+        assertEquals(signedDashS, com.music.musica.core.model.upsizeArtworkUrl(signedDashS, 72))
     }
 }

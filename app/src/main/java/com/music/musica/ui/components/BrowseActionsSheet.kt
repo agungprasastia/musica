@@ -214,7 +214,7 @@ fun BrowseActionsSheet(
                             when {
                                 isArtist && isSavedOrSubscribed -> R.string.menu_subscribed
                                 isArtist -> R.string.menu_subscribe
-                                isSavedOrSubscribed -> R.string.action_save
+                                isSavedOrSubscribed -> R.string.action_saved
                                 else -> R.string.action_save
                             },
                         ),
@@ -223,13 +223,15 @@ fun BrowseActionsSheet(
                         modifier = Modifier.weight(1f),
                     )
                 }
-                BrowseQuickTile(
-                    icon = Icons.Rounded.Share,
-                    label = stringResource(R.string.menu_share),
-                    tint = fg,
-                    onClick = { onDismiss(); onShare() },
-                    modifier = Modifier.weight(1f),
-                )
+                if (userPlaylist == null || !userPlaylist.playlistId.startsWith("local_")) {
+                    BrowseQuickTile(
+                        icon = Icons.Rounded.Share,
+                        label = stringResource(R.string.menu_share),
+                        tint = fg,
+                        onClick = { onDismiss(); onShare() },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
 
             HorizontalDivider(
@@ -243,23 +245,6 @@ fun BrowseActionsSheet(
             }
             BrowseActionRow(Icons.AutoMirrored.Rounded.QueueMusic, stringResource(R.string.menu_add_to_queue), fg) {
                 onAddToQueue(); onDismiss()
-            }
-            if (userPlaylist == null) {
-                val saveLabel = when {
-                    isArtist && isSavedOrSubscribed -> stringResource(R.string.menu_subscribed)
-                    isArtist -> stringResource(R.string.menu_subscribe)
-                    isSavedOrSubscribed -> stringResource(R.string.menu_remove_from_library)
-                    else -> stringResource(R.string.menu_save_to_library)
-                }
-                val saveIcon = when {
-                    isArtist && isSavedOrSubscribed -> Icons.Rounded.Star
-                    isArtist -> Icons.Rounded.StarOutline
-                    isSavedOrSubscribed -> Icons.Rounded.Bookmark
-                    else -> Icons.Rounded.BookmarkBorder
-                }
-                BrowseActionRow(saveIcon, saveLabel, if (isSavedOrSubscribed) MusicaAccentRed else fg) {
-                    onToggleSaveOrSubscribe(); onDismiss()
-                }
             }
             if (onDownloadAll != null && !isArtist) {
                 BrowseActionRow(Icons.Rounded.Download, stringResource(R.string.menu_download_all), fg) {

@@ -21,14 +21,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
@@ -135,6 +138,15 @@ fun LibraryScreen(
     val orderedPlaylists = remember(playlists) {
         playlists.sortedByDescending { it.isPinned }
     }
+    val dedupedRemoteShelves = remember(remoteLibraryShelves, orderedPlaylists) {
+        val syncedPlaylistIds = orderedPlaylists.mapTo(mutableSetOf()) { it.playlistId.removePrefix("VL") }
+        remoteLibraryShelves.mapNotNull { shelf ->
+            val filtered = shelf.items.filterNot { item ->
+                item is ShelfItem.Playlist && item.browseId.removePrefix("VL") in syncedPlaylistIds
+            }
+            if (filtered.isEmpty()) null else shelf.copy(items = filtered)
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
     PullToRefreshBox(
@@ -172,23 +184,20 @@ fun LibraryScreen(
                     }
                 }
 
-                // Signature ISO Credit-Card Ratio Replay Carousel
+                // Signature ISO Credit-Card Ratio Replay Hero Card (symmetric full-width alignment)
                 item(key = "lib_replay_carousel") {
-                    val rowState = rememberLazyListState()
-                    LazyRow(
-                        state = rowState,
-                        flingBehavior = rememberSnapFlingBehavior(rowState),
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        modifier = Modifier.padding(bottom = 18.dp),
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 18.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        item(key = "replay_card_main") {
-                            ReplayCreditCard(
-                                replaySummary = replaySummary,
-                                reduceAnimation = reduceAnimation,
-                                onClick = onOpenReplay,
-                            )
-                        }
+                        ReplayCreditCard(
+                            replaySummary = replaySummary,
+                            reduceAnimation = reduceAnimation,
+                            onClick = onOpenReplay,
+                        )
                     }
                 }
 
@@ -344,10 +353,10 @@ fun LibraryScreen(
                     }
                 }
 
-                // Remote YouTube Music Library Shelves (when signed in)
-                if (remoteLibraryShelves.isNotEmpty()) {
+                // Remote YouTube Music Library Shelves (when signed in, deduplicated against Playlists row)
+                if (dedupedRemoteShelves.isNotEmpty()) {
                     itemsIndexed(
-                        items = remoteLibraryShelves,
+                        items = dedupedRemoteShelves,
                         key = { idx, shelf -> "remote_lib_${idx}_${shelf.title}" },
                     ) { _, shelf ->
                         ShelfSection(
@@ -421,7 +430,8 @@ private fun ReplayCreditCard(
     val shape = RoundedCornerShape(20.dp)
     Box(
         modifier = Modifier
-            .width(300.dp)
+            .fillMaxWidth()
+            .widthIn(max = 420.dp)
             .aspectRatio(1.586f)
             .clip(shape)
             .border(0.75.dp, Color.White.copy(alpha = 0.20f), shape)
@@ -468,7 +478,7 @@ private fun ReplayCreditCard(
             Column {
                 val totalMinutes = (replaySummary.totalListenedMs / 60_000L).toInt()
                 Text(
-                    text = "$totalMinutes min · ${replaySummary.totalTracksPlayed} plays",
+                    text = stringResource(R.string.replay_card_stats, totalMinutes, replaySummary.totalTracksPlayed),
                     style = MaterialTheme.typography.headlineMedium.copy(
                         fontSize = 24.sp,
                         fontWeight = FontWeight.ExtraBold,
@@ -608,6 +618,7 @@ fun PlaylistPickerSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(bottom = 14.dp),
         ) {
             Row(

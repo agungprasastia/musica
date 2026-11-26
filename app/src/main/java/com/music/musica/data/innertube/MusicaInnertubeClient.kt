@@ -92,10 +92,22 @@ class MusicaInnertubeClient(
         return InnertubeParsers.parseDetailPage(browseId, root)
     }
 
-    suspend fun browseDetailContinuation(browseId: String, continuation: String): Pair<List<Song>, String?> {
+    suspend fun browseDetailContinuation(
+        browseId: String,
+        continuation: String,
+        fallbackCover: String? = null,
+        fallbackAlbum: com.music.musica.core.model.AlbumRef? = null,
+        fallbackArtist: com.music.musica.core.model.ArtistRef? = null,
+    ): Pair<List<Song>, String?> {
         val root = postMusic("browse", continuation = continuation) {}
             ?: return emptyList<Song>() to null
-        return InnertubeParsers.parseDetailContinuation(browseId, root)
+        return InnertubeParsers.parseDetailContinuation(
+            browseId = browseId,
+            root = root,
+            fallbackCover = fallbackCover,
+            fallbackAlbum = fallbackAlbum,
+            fallbackArtist = fallbackArtist,
+        )
     }
 
     suspend fun browseLikedSongs(continuation: String? = null): Pair<List<Song>, String?> {

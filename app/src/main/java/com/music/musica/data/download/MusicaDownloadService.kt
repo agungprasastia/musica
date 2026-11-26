@@ -115,8 +115,19 @@ class MusicaDownloadService : DownloadService(
             downloadQualityKbpsProvider: () -> Int,
             wifiOnlyProvider: () -> Boolean,
         ): DownloadManager {
+            val urlToVideoId = java.util.concurrent.ConcurrentHashMap<String, String>()
+            val downloadHttpFactory = com.music.musica.data.stream.ChunkedDataSource.Factory(
+                upstream = cacheProvider.upstreamHttpFactory,
+                onHttpRefused = { uri, responseCode ->
+                    if (responseCode == 403 || responseCode == 410) {
+                        urlToVideoId.remove(uri.toString())?.let { vid ->
+                            streamResolver.invalidate(vid)
+                        }
+                    }
+                },
+            )
             val resolvingFactory = ResolvingDataSource.Factory(
-                cacheProvider.chunkedHttpFactory,
+                downloadHttpFactory,
                 object : ResolvingDataSource.Resolver {
                     override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
                         val uri = dataSpec.uri
@@ -134,6 +145,9 @@ class MusicaDownloadService : DownloadService(
                         }.getOrElse { err ->
                             throw IOException("Failed to resolve download stream for $videoId", err)
                         }
+
+                        if (urlToVideoId.size > 128) urlToVideoId.clear()
+                        urlToVideoId[resolved.url] = videoId
 
                         val headers = dataSpec.httpRequestHeaders.toMutableMap().apply {
                             putAll(resolved.headers)

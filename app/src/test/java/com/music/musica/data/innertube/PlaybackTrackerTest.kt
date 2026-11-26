@@ -161,4 +161,36 @@ class PlaybackTrackerTest {
             trackerScope.cancel()
         }
     }
+
+    @Test
+    fun rapidTrackChangeCancelsStaleOpenSession() = runBlocking {
+        val pingedUrls = mutableListOf<String>()
+        val slowTransport = object : PlaybackTrackingTransport {
+            override suspend fun fetchTracking(videoId: String): PlaybackTrackingUrls {
+                kotlinx.coroutines.delay(if (videoId == "FIRST111111") 120L else 10L)
+                return PlaybackTrackingUrls(
+                    playbackUrl = "https://example/playback/$videoId",
+                    atrUrl = null,
+                    watchtimeUrl = null,
+                )
+            }
+
+            override suspend fun ping(baseUrl: String, params: Map<String, String>): Int {
+                pingedUrls += baseUrl
+                return 204
+            }
+        }
+
+        val trackerScope = CoroutineScope(coroutineContext + SupervisorJob())
+        try {
+            val tracker = PlaybackTracker(slowTransport, { true }, { true }, { true }, trackerScope)
+            tracker.onPlaying("FIRST111111")
+            tracker.onPlaying("SECOND22222")
+            trackerScope.awaitChildren()
+
+            assertEquals(listOf("https://example/playback/SECOND22222"), pingedUrls)
+        } finally {
+            trackerScope.cancel()
+        }
+    }
 }

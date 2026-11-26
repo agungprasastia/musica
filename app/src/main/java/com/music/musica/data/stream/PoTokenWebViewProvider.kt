@@ -76,13 +76,14 @@ class PoTokenWebViewProvider(
         cookie: String?,
     ): PoTokenResult? {
         if (webViewUnusable || visitorData.isBlank()) return null
+        val minterBefore = minter
         return try {
             withTimeout(OUTER_TIMEOUT_MS) {
                 mintTokenPair(videoId = videoId, sessionId = visitorData, forceRecreate = false)
             }
         } catch (e: TimeoutCancellationException) {
             Log.w(TAG, "PoToken mint timed out after ${OUTER_TIMEOUT_MS}ms; continuing without token")
-            clearMinter()
+            clearMinter(expected = minterBefore)
             null
         } catch (e: CancellationException) {
             throw e
@@ -101,8 +102,11 @@ class PoTokenWebViewProvider(
         clearMinter()
     }
 
-    private suspend fun clearMinter() {
+    private suspend fun clearMinter(expected: BotGuardWebViewMinter? = null) {
         mutex.withLock {
+            if (expected != null && minter != null && minter !== expected) {
+                return@withLock
+            }
             runCatching { minter?.close() }
             minter = null
             sessionStreamingToken = null
@@ -199,16 +203,14 @@ class PoTokenWebViewProvider(
                     val msg = consoleMessage.message().orEmpty()
                     if (msg.contains("Uncaught")) {
                         val detail = "\"$msg\" (${consoleMessage.lineNumber()})"
+                        isDead = true
+                        val err = BotGuardException(detail)
                         if (initResumed.get()) {
-                            isDead = true
-                            val err = BotGuardException(detail)
                             close()
-                            drainPendingMints(err)
                         } else {
-                            val err = UnusableWebViewException(detail)
                             failInitialization(err)
-                            drainPendingMints(err)
                         }
+                        drainPendingMints(err)
                     }
                     return true
                 }
@@ -466,6 +468,6 @@ class PoTokenWebViewProvider(
 
     companion object {
         private const val TAG = "MusicaPoToken"
-        private const val OUTER_TIMEOUT_MS = 10_000L
+        private const val OUTER_TIMEOUT_MS = 28_000L
     }
 }

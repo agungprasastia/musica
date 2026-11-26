@@ -46,8 +46,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -115,15 +118,19 @@ fun SearchScreen(
     onAddToQueue: (Song) -> Unit,
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
-    LaunchedEffect(listState, hasMore, isLoadingMore) {
-        if (!hasMore || isLoadingMore) return@LaunchedEffect
+    val currentLoadingMore by rememberUpdatedState(isLoadingMore)
+    val currentOnLoadMore by rememberUpdatedState(onLoadMore)
+    LaunchedEffect(listState, hasMore, query, filter) {
+        if (!hasMore) return@LaunchedEffect
         snapshotFlow {
             val layout = listState.layoutInfo
             val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: 0
             layout.totalItemsCount > 0 && lastVisible >= layout.totalItemsCount - 5
-        }.collect { nearEnd ->
-            if (nearEnd) onLoadMore()
         }
+            .distinctUntilChanged()
+            .collect { nearEnd ->
+                if (nearEnd && !currentLoadingMore) currentOnLoadMore()
+            }
     }
     val filterOptions = listOf(
         stringResource(R.string.search_filter_all),

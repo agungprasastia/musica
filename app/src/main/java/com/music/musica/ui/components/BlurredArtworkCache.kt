@@ -31,7 +31,7 @@ private val blurredArtworkLru = LruCache<String, ImageBitmap>(96)
 fun rememberBlurredArtwork(url: String?, radius: Int = 4): ImageBitmap? {
     val context = LocalPlatformContext.current
     val cacheKey = remember(url, radius) {
-        url?.takeIf { it.isNotBlank() }?.let { "${upsizeArtworkUrl(it, 72)}#$radius" }
+        url?.takeIf { it.isNotBlank() }?.let { "$it#$radius" }
     }
     var bitmap by remember(cacheKey) {
         mutableStateOf(cacheKey?.let { blurredArtworkLru.get(it) })
@@ -45,15 +45,26 @@ fun rememberBlurredArtwork(url: String?, radius: Int = 4): ImageBitmap? {
         }
         val computed = withContext(Dispatchers.IO) {
             runCatching {
-                val request = ImageRequest.Builder(context)
-                    .data(upsizeArtworkUrl(url, 72))
-                    .size(36)
-                    .allowHardware(false)
-                    .build()
-                val result = SingletonImageLoader.get(context).execute(request)
-                val src = (result as? SuccessResult)?.image?.toBitmap() ?: return@runCatching null
+                val loader = SingletonImageLoader.get(context)
+                val preferred = upsizeArtworkUrl(url, 120) ?: url
+                val candidates = listOf(preferred, url).distinct()
+                var src: Bitmap? = null
+                for (candidate in candidates) {
+                    val request = ImageRequest.Builder(context)
+                        .data(candidate)
+                        .size(48)
+                        .allowHardware(false)
+                        .build()
+                    val result = loader.execute(request)
+                    val bmp = (result as? SuccessResult)?.image?.toBitmap()
+                    if (bmp != null) {
+                        src = bmp
+                        break
+                    }
+                }
+                val resolved = src ?: return@runCatching null
                 withContext(Dispatchers.Default) {
-                    fastBoxBlur(src, radius).asImageBitmap()
+                    fastBoxBlur(resolved, radius).asImageBitmap()
                 }
             }.getOrNull()
         }
