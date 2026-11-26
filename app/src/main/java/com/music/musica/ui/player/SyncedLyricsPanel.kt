@@ -88,6 +88,7 @@ import com.music.musica.ui.components.lightweightGlass
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.delay
 import kotlin.math.abs
 
 private val AppleWaveEasing = CubicBezierEasing(0.41f, 0f, 0.12f, 0.99f)
@@ -188,13 +189,14 @@ fun SyncedLyricsPanel(
                     }
                 } else {
                     val listState = rememberLazyListState()
-                    var lastManualScrollAt by remember { mutableLongStateOf(0L) }
-                    val isBrowsing = listState.isScrollInProgress ||
-                        (SystemClock.elapsedRealtime() - lastManualScrollAt) < MANUAL_SCROLL_COOLDOWN_MS
+                    var isBrowsing by remember(result) { mutableStateOf(false) }
 
                     LaunchedEffect(listState.isScrollInProgress) {
                         if (listState.isScrollInProgress) {
-                            lastManualScrollAt = SystemClock.elapsedRealtime()
+                            isBrowsing = true
+                        } else if (isBrowsing) {
+                            delay(MANUAL_SCROLL_COOLDOWN_MS)
+                            isBrowsing = false
                         }
                     }
 
@@ -233,11 +235,8 @@ fun SyncedLyricsPanel(
                         }
                     }
 
-                    LaunchedEffect(activeIndex) {
-                        if (activeIndex >= 0 &&
-                            !listState.isScrollInProgress &&
-                            SystemClock.elapsedRealtime() - lastManualScrollAt > MANUAL_SCROLL_COOLDOWN_MS
-                        ) {
+                    LaunchedEffect(activeIndex, isBrowsing) {
+                        if (activeIndex >= 0 && !isBrowsing && !listState.isScrollInProgress) {
                             if (reduceAnimation) {
                                 listState.scrollToItem(activeIndex, scrollOffset = -200)
                             } else {
@@ -340,7 +339,7 @@ fun SyncedLyricsPanel(
                                     reduceAnimation = reduceAnimation,
                                     onClick = {
                                         if (result.isSynced) {
-                                            lastManualScrollAt = 0L
+                                            isBrowsing = false
                                             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                             onSeekTo((line.startMs - result.offsetMs).coerceAtLeast(0L))
                                         }

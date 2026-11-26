@@ -203,6 +203,17 @@ internal fun MusicaAppRoot(
         }
     }
 
+    val visibleRoute = navigator.visibleRoute(detailStack.size)
+    val topDetail = if (visibleRoute == null) detailStack.lastOrNull() else null
+    val hasActiveOverlay = visibleRoute != null || topDetail != null
+
+    val showingDarkSurface = (!settings.onboardingCompleted && !onboardingLoginOpen) ||
+        (settings.onboardingCompleted && (
+            (nowPlayingExpanded && playerState.currentSong != null) ||
+                visibleRoute == AppRoute.Replay
+            ))
+    DarkStatusBarEffect(enabled = showingDarkSurface)
+
     // First-launch Onboarding flow
     if (!settings.onboardingCompleted) {
         BackHandler(enabled = onboardingLoginOpen) {
@@ -225,15 +236,6 @@ internal fun MusicaAppRoot(
         }
         return
     }
-
-    val visibleRoute = navigator.visibleRoute(detailStack.size)
-    val topDetail = if (visibleRoute == null) detailStack.lastOrNull() else null
-    val hasActiveOverlay = visibleRoute != null || topDetail != null
-
-    val showingDarkSurface = !settings.onboardingCompleted && !onboardingLoginOpen ||
-        (nowPlayingExpanded && playerState.currentSong != null) ||
-        visibleRoute == AppRoute.Replay
-    DarkStatusBarEffect(enabled = showingDarkSurface)
 
     LaunchedEffect(visibleRoute) {
         if (visibleRoute == AppRoute.Settings) {
@@ -627,17 +629,23 @@ internal fun MusicaAppRoot(
                     }
                 } else null,
                 onShare = {
-                    val shareUrl = when {
-                        target.type == BrowseType.PLAYLIST ->
-                            "https://music.youtube.com/playlist?list=${target.browseId.removePrefix("VL")}"
-                        target.type == BrowseType.ARTIST ->
-                            "https://music.youtube.com/channel/${target.browseId}"
-                        else ->
-                            "https://music.youtube.com/browse/${target.browseId}"
+                    val isLocalPlaylist = target.userPlaylist?.playlistId?.startsWith("local_") == true
+                    val shareText = if (isLocalPlaylist) {
+                        target.title
+                    } else {
+                        val shareUrl = when {
+                            target.type == BrowseType.PLAYLIST ->
+                                "https://music.youtube.com/playlist?list=${target.browseId.removePrefix("VL")}"
+                            target.type == BrowseType.ARTIST ->
+                                "https://music.youtube.com/channel/${target.browseId}"
+                            else ->
+                                "https://music.youtube.com/browse/${target.browseId}"
+                        }
+                        "${target.title}\n$shareUrl"
                     }
                     val shareIntent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, "${target.title}\n$shareUrl")
+                        putExtra(Intent.EXTRA_TEXT, shareText)
                     }
                     context.startActivity(Intent.createChooser(shareIntent, target.title))
                 },

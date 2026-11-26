@@ -119,6 +119,7 @@ class SettingsStoreTest {
 
         val backup = UserSettings(
             themeMode = ThemeMode.LIGHT,
+            appLanguage = AppLanguage.INDONESIAN,
             audioCacheLimitMb = 1024,
             crossfadeSeconds = 6,
             playbackSpeed = 1.25f,
@@ -136,6 +137,7 @@ class SettingsStoreTest {
 
         val restored = store.settings.first()
         assertEquals(ThemeMode.LIGHT, restored.themeMode)
+        assertEquals(AppLanguage.INDONESIAN, restored.appLanguage)
         assertEquals(1024, restored.audioCacheLimitMb)
         assertEquals(6, restored.crossfadeSeconds)
         assertEquals(1.25f, restored.playbackSpeed, 0.001f)

@@ -65,7 +65,12 @@ class PlayerController(
                 return
             }
             if (!connectIfNeeded) return
-            controllerFuture = null
+            synchronized(this) {
+                if (controllerFuture === future) {
+                    controllerFuture = null
+                }
+            }
+            runCatching { MediaController.releaseFuture(future) }
             val freshFuture = ensureControllerFuture()
             scope.launch {
                 runCatching { freshFuture.await() }
@@ -83,6 +88,8 @@ class PlayerController(
                 ?.sendCustomCommand(command, args)
         }
     }
+
+    private fun hasLoadedQueue(): Boolean = state.value.currentSong != null
 
     fun playQueue(songs: List<Song>, startIndex: Int = 0, shuffled: Boolean? = null) {
         if (songs.isEmpty()) return
@@ -111,10 +118,30 @@ class PlayerController(
         )
     }
 
+    fun playNextAll(songs: List<Song>) {
+        if (songs.isEmpty()) return
+        val handoffId = MusicaSessionCommands.putQueuePayload(songs, 0, null)
+        dispatchCommand(
+            action = MusicaSessionCommands.CMD_PLAY_NEXT_LIST,
+            args = bundleOf(MusicaSessionCommands.ARG_HANDOFF_ID to handoffId),
+            connectIfNeeded = true,
+        )
+    }
+
     fun addToQueue(song: Song) {
         val handoffId = MusicaSessionCommands.putSongPayload(song)
         dispatchCommand(
             action = MusicaSessionCommands.CMD_ADD_TO_QUEUE,
+            args = bundleOf(MusicaSessionCommands.ARG_HANDOFF_ID to handoffId),
+            connectIfNeeded = true,
+        )
+    }
+
+    fun addAllToQueue(songs: List<Song>) {
+        if (songs.isEmpty()) return
+        val handoffId = MusicaSessionCommands.putQueuePayload(songs, 0, null)
+        dispatchCommand(
+            action = MusicaSessionCommands.CMD_ADD_TO_QUEUE_LIST,
             args = bundleOf(MusicaSessionCommands.ARG_HANDOFF_ID to handoffId),
             connectIfNeeded = true,
         )
@@ -126,18 +153,18 @@ class PlayerController(
             MusicaSessionCommands.ARG_FROM_INDEX to from,
             MusicaSessionCommands.ARG_TO_INDEX to to,
         ),
-        connectIfNeeded = false,
+        connectIfNeeded = hasLoadedQueue(),
     )
 
     fun removeQueueItem(index: Int) = dispatchCommand(
         action = MusicaSessionCommands.CMD_REMOVE_ITEM,
         args = bundleOf(MusicaSessionCommands.ARG_INDEX to index),
-        connectIfNeeded = false,
+        connectIfNeeded = hasLoadedQueue(),
     )
 
     fun clearUpcomingQueue() = dispatchCommand(
         action = MusicaSessionCommands.CMD_CLEAR_UPCOMING,
-        connectIfNeeded = false,
+        connectIfNeeded = hasLoadedQueue(),
     )
 
     fun togglePlayPause() = dispatchCommand(
@@ -174,18 +201,18 @@ class PlayerController(
     fun setPlaybackSpeed(speed: Float) = dispatchCommand(
         action = MusicaSessionCommands.CMD_SET_SPEED,
         args = bundleOf(MusicaSessionCommands.ARG_SPEED to speed),
-        connectIfNeeded = false,
+        connectIfNeeded = hasLoadedQueue(),
     )
 
     fun setSkipSilence(enabled: Boolean) = dispatchCommand(
         action = MusicaSessionCommands.CMD_SET_SKIP_SILENCE,
         args = bundleOf(MusicaSessionCommands.ARG_ENABLED to enabled),
-        connectIfNeeded = false,
+        connectIfNeeded = hasLoadedQueue(),
     )
 
     fun pauseForSleepTimer() = dispatchCommand(
         action = MusicaSessionCommands.CMD_PAUSE_SLEEP_TIMER,
-        connectIfNeeded = false,
+        connectIfNeeded = hasLoadedQueue(),
     )
 
     fun clearError() {
@@ -205,7 +232,7 @@ class PlayerController(
                 MusicaSessionCommands.ARG_REMAINING_MS to (remainingMs ?: 0L),
                 MusicaSessionCommands.ARG_AFTER_TRACK to afterTrack,
             ),
-            connectIfNeeded = false,
+            connectIfNeeded = hasLoadedQueue(),
         )
     }
 }

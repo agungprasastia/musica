@@ -21,12 +21,20 @@ import kotlinx.serialization.json.contentOrNull
  */
 object InnertubeParsers {
 
+    private val DURATION_REGEX = Regex("""^\d{1,3}[:.]\d{2}([:.]\d{2})?$""")
+
     fun parseDurationMs(text: String?): Long {
         if (text.isNullOrBlank()) return 0L
-        val parts = text.trim().split(':').map { it.trim().toLongOrNull() ?: return 0L }
+        val trimmed = text.trim()
+        if (!DURATION_REGEX.matches(trimmed)) return 0L
+        val parts = trimmed.split(':', '.').map { it.toLongOrNull() ?: return 0L }
         return when (parts.size) {
-            2 -> (parts[0] * 60L + parts[1]) * 1000L
-            3 -> (parts[0] * 3600L + parts[1] * 60L + parts[2]) * 1000L
+            2 -> if (parts[1] < 60L) (parts[0] * 60L + parts[1]) * 1000L else 0L
+            3 -> if (parts[1] < 60L && parts[2] < 60L) {
+                (parts[0] * 3600L + parts[1] * 60L + parts[2]) * 1000L
+            } else {
+                0L
+            }
             else -> 0L
         }
     }
@@ -120,6 +128,7 @@ object InnertubeParsers {
 
             if (shelfContinuation == null) {
                 shelfContinuation = extractContinuation(shelfObj)
+                    ?: extractInlineContinuation(shelfObj.arr("contents"))
             }
 
             val shelfTitle = extractShelfTitle(shelfObj)
@@ -159,6 +168,8 @@ object InnertubeParsers {
         }
 
         val continuation = shelfContinuation ?: secondarySectionList?.let(::extractContinuation)
+        val audioPlaylistId = extractAudioPlaylistId(headerRenderer, root)
+            ?: tracks.firstOrNull()?.playlistId?.takeIf { it.startsWith("OLAK5uy_") }
         val resolvedArtist = straplineArtist
             ?: if (type == BrowseType.ALBUM) {
                 tracks.firstOrNull()?.artists?.firstOrNull { !it.browseId.isNullOrBlank() }
@@ -176,6 +187,7 @@ object InnertubeParsers {
             tracks = tracks,
             sections = sections,
             continuation = continuation,
+            audioPlaylistId = audioPlaylistId,
         )
     }
 
@@ -183,15 +195,27 @@ object InnertubeParsers {
      * Parses playlist/detail continuation pages (>100 tracks), supporting both
      * `musicPlaylistShelfContinuation`, `musicShelfContinuation`, and `sectionListContinuation`.
      */
-    fun parseDetailContinuation(browseId: String, root: JsonObject): Pair<List<Song>, String?> {
+    fun parseDetailContinuation(
+        browseId: String,
+        root: JsonObject,
+        fallbackCover: String? = null,
+        fallbackAlbum: AlbumRef? = null,
+        fallbackArtist: ArtistRef? = null,
+    ): Pair<List<Song>, String?> {
         val contContents = root.obj("continuationContents")
         val shelf = contContents?.obj("musicPlaylistShelfContinuation")
             ?: contContents?.obj("musicShelfContinuation")
         if (shelf != null) {
-            val songs = parseRendererItems(shelf.arr("contents"))
+            val songs = parseRendererItems(
+                shelf.arr("contents"),
+                fallbackCover = fallbackCover,
+                fallbackAlbum = fallbackAlbum,
+                fallbackArtist = fallbackArtist,
+            )
                 .filterIsInstance<ShelfItem.Track>()
                 .map { it.song }
-            return songs to extractContinuation(shelf)
+            val next = extractContinuation(shelf) ?: extractInlineContinuation(shelf.arr("contents"))
+            return songs to next
         }
 
         val sectionCont = contContents?.obj("sectionListContinuation")
@@ -203,10 +227,17 @@ object InnertubeParsers {
                 val inner = obj.obj("musicPlaylistShelfRenderer")
                     ?: obj.obj("musicShelfRenderer")
                     ?: return@forEach
-                songs += parseRendererItems(inner.arr("contents"))
+                songs += parseRendererItems(
+                    inner.arr("contents"),
+                    fallbackCover = fallbackCover,
+                    fallbackAlbum = fallbackAlbum,
+                    fallbackArtist = fallbackArtist,
+                )
                     .filterIsInstance<ShelfItem.Track>()
                     .map { it.song }
-                if (nextToken == null) nextToken = extractContinuation(inner)
+                if (nextToken == null) {
+                    nextToken = extractContinuation(inner) ?: extractInlineContinuation(inner.arr("contents"))
+                }
             }
             return songs to nextToken
         }
@@ -221,17 +252,16 @@ object InnertubeParsers {
                     ?.obj("appendContinuationItemsAction")
                     ?.arr("continuationItems")
                     ?: return@forEach
-                songs += parseRendererItems(items)
+                songs += parseRendererItems(
+                    items,
+                    fallbackCover = fallbackCover,
+                    fallbackAlbum = fallbackAlbum,
+                    fallbackArtist = fallbackArtist,
+                )
                     .filterIsInstance<ShelfItem.Track>()
                     .map { it.song }
-                items.forEach { item ->
-                    val token = item.asObj()
-                        ?.obj("continuationItemRenderer")
-                        ?.obj("continuationEndpoint")
-                        ?.obj("continuationCommand")
-                        ?.str("token")
-                    if (!token.isNullOrBlank()) nextToken = token
-                }
+                val inline = extractInlineContinuation(items)
+                if (!inline.isNullOrBlank()) nextToken = inline
             }
             return songs to nextToken
         }
@@ -281,8 +311,12 @@ object InnertubeParsers {
         sectionList.arr("contents")?.forEach { elem ->
             val obj = elem.asObj() ?: return@forEach
             obj.obj("musicCardShelfRenderer")?.let { card ->
-                parseCardShelfTopResult(card)?.let { items += it }
-                items += parseRendererItems(card.arr("contents"))
+                val top = parseCardShelfTopResult(card)
+                if (top != null) items += top
+                val topArtist = (top as? ShelfItem.Artist)?.let {
+                    ArtistRef(name = it.title, browseId = it.browseId)
+                }
+                items += parseRendererItems(card.arr("contents"), fallbackArtist = topArtist)
             }
             obj.obj("musicShelfRenderer")?.let { shelf ->
                 items += parseRendererItems(shelf.arr("contents"))
@@ -725,10 +759,12 @@ object InnertubeParsers {
     private fun extractBestThumbnail(container: JsonObject?): String? {
         if (container == null) return null
         val list = container.arr("thumbnails")
+            ?: container.obj("thumbnail")?.arr("thumbnails")
             ?: container.obj("musicThumbnailRenderer")?.obj("thumbnail")?.arr("thumbnails")
             ?: container.obj("croppedSquareThumbnailRenderer")?.obj("thumbnail")?.arr("thumbnails")
             ?: return null
-        return list.lastOrNull()?.asObj()?.str("url")
+        val raw = list.lastOrNull()?.asObj()?.str("url")?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        return if (raw.startsWith("//")) "https:$raw" else raw
     }
 
     private fun extractShelfTitle(shelf: JsonObject): String =
@@ -738,10 +774,44 @@ object InnertubeParsers {
             ?: ""
 
     private fun extractContinuation(node: JsonObject): String? =
-        node.arr("continuations")?.firstOrNull()?.asObj()
-            ?.obj("nextContinuationData")?.str("continuation")
-            ?: node.arr("continuations")?.firstOrNull()?.asObj()
-                ?.obj("reloadContinuationData")?.str("continuation")
+        node.arr("continuations")?.firstNotNullOfOrNull { entry ->
+            entry.asObj()?.obj("nextContinuationData")?.str("continuation")?.takeIf { it.isNotBlank() }
+        }
+
+    private fun extractInlineContinuation(items: JsonArray?): String? {
+        if (items == null) return null
+        for (item in items) {
+            val token = item.asObj()
+                ?.obj("continuationItemRenderer")
+                ?.obj("continuationEndpoint")
+                ?.obj("continuationCommand")
+                ?.str("token")
+            if (!token.isNullOrBlank()) return token
+        }
+        return null
+    }
+
+    private fun extractAudioPlaylistId(headerRenderer: JsonObject?, root: JsonObject): String? {
+        fun findOlak(el: JsonElement?): String? {
+            when (el) {
+                is JsonObject -> {
+                    val pid = el.str("playlistId")
+                    if (!pid.isNullOrBlank() && pid.startsWith("OLAK5uy_")) return pid
+                    for (value in el.values) {
+                        findOlak(value)?.let { return it }
+                    }
+                }
+                is JsonArray -> {
+                    for (item in el) {
+                        findOlak(item)?.let { return it }
+                    }
+                }
+                else -> Unit
+            }
+            return null
+        }
+        return findOlak(headerRenderer) ?: findOlak(root.obj("microformat"))
+    }
 
     private fun JsonElement?.asObj(): JsonObject? = this as? JsonObject
     private fun JsonObject.obj(key: String): JsonObject? = this[key] as? JsonObject

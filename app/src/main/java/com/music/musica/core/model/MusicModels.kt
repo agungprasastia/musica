@@ -3,8 +3,8 @@ package com.music.musica.core.model
 import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
-private val GOOGLE_THUMB_REGEX = Regex("""=w\d+-h\d+[^&\s]*""")
-private val GOOGLE_S_SIZE_REGEX = Regex("""=s\d+[^&\s]*""")
+private val GOOGLE_THUMB_REGEX = Regex("""=w\d+-h\d+[^?&\s]*""")
+private val GOOGLE_S_SIZE_REGEX = Regex("""=s\d+[^?&\s]*""")
 
 @Immutable
 @Serializable
@@ -44,6 +44,9 @@ data class Song(
 
 fun upsizeArtworkUrl(url: String?, sizePx: Int = 544): String? {
     if (url.isNullOrBlank()) return null
+    // Signed or query-authenticated YouTube/Google thumbnails (e.g. ?sqp=..., -s-, or /image/mixart)
+    // fail with HTTP 400/403 if their size suffix is rewritten.
+    if (url.contains('?') || url.contains("-s-")) return url
     if (GOOGLE_THUMB_REGEX.containsMatchIn(url)) {
         return url.replace(GOOGLE_THUMB_REGEX, "=w$sizePx-h$sizePx-l90-rj")
     }
@@ -178,6 +181,7 @@ data class DetailPage(
     val tracks: List<Song> = emptyList(),
     val sections: List<HomeShelf> = emptyList(),
     val continuation: String? = null,
+    val audioPlaylistId: String? = null,
 )
 
 enum class SearchFilter(val innertubeParams: String?) {

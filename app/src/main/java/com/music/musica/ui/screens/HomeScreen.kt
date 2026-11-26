@@ -48,7 +48,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -349,7 +352,7 @@ fun HomeScreen(
  * Clean-room Musica acoustic wave emblem rendered in the Home top-left slot.
  */
 @Composable
-private fun MusicaBrandEmblem(
+internal fun MusicaBrandEmblem(
     color: Color,
     modifier: Modifier = Modifier,
 ) {
@@ -456,7 +459,10 @@ private fun TopPicksHeroShelf(
                 modifier = Modifier.fillMaxWidth(),
             ) { idx ->
                 val item = heroItems[idx]
-                    val coverUrl = remember(item.thumbnailUrl) { upsizeArtworkUrl(item.thumbnailUrl, 480) }
+                    var useRawFallback by remember(item.thumbnailUrl) { mutableStateOf(false) }
+                    val coverUrl = remember(item.thumbnailUrl, useRawFallback) {
+                        if (useRawFallback) item.thumbnailUrl else upsizeArtworkUrl(item.thumbnailUrl, 480)
+                    }
                     val blurredReflection = rememberBlurredArtwork(item.thumbnailUrl, radius = 4)
                     val eyebrow = when (item) {
                         is ShelfItem.Album -> albumLabel
@@ -521,6 +527,11 @@ private fun TopPicksHeroShelf(
                                 model = coverUrl,
                                 contentDescription = item.title,
                                 contentScale = ContentScale.Crop,
+                                onError = {
+                                    if (!useRawFallback && coverUrl != item.thumbnailUrl) {
+                                        useRawFallback = true
+                                    }
+                                },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .aspectRatio(1f)

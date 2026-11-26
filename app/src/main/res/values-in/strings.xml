@@ -34,6 +34,10 @@
     <string name="action_cancel">Batal</string>
     <string name="action_done">Selesai</string>
     <string name="action_save">Simpan</string>
+    <string name="action_saved">Tersimpan</string>
+    <string name="action_like">Suka</string>
+    <string name="action_liked">Disukai</string>
+    <string name="action_download">Unduh</string>
     <string name="action_delete">Hapus</string>
     <string name="action_close">Tutup</string>
     <string name="action_clear">Bersihkan</string>
@@ -179,9 +183,11 @@
     <string name="replay_top_songs">Lagu Teratas</string>
     <string name="replay_top_artists">Artis Teratas</string>
     <string name="replay_plays_count">%1$d kali diputar</string>
+    <string name="replay_card_stats">%1$d mnt · %2$d putaran</string>
 
     <!-- Downloads -->
     <string name="downloads_title">Unduhan Offline</string>
+    <string name="downloads_badge_offline">Offline</string>
     <string name="downloads_empty">Belum ada lagu yang diunduh</string>
     <string name="downloads_empty_subtitle">Unduh lagu, album, atau playlist untuk didengarkan secara offline kapan saja.</string>
     <string name="downloads_tab_tracks">Lagu</string>
@@ -246,7 +252,7 @@
     <string name="settings_lyrics_providers">Penyedia Lirik</string>
 
     <string name="settings_clear_audio_cache">Bersihkan Cache Audio</string>
-    <string name="settings_clear_image_cache">Bersihkan Cache Gambar</string>
+    <string name="settings_clear_image_cache">Cache Gambar</string>
     <string name="settings_cache_cleared">Cache dibersihkan</string>
 
     <string name="settings_app_language">Bahasa Aplikasi</string>

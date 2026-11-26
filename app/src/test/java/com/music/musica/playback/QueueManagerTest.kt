@@ -93,4 +93,22 @@ class QueueManagerTest {
         assertEquals(2, qm.currentIndex)
         assertEquals("t3", qm.currentSong?.videoId)
     }
+
+    @Test
+    fun playNextAllAndAddAllToQueue_preserveExactOrderOnEmptyAndActiveQueues() {
+        val emptyNext = QueueManager()
+        emptyNext.playNextAll(listOf(song("A"), song("B"), song("C")))
+        assertEquals(listOf("A", "B", "C"), emptyNext.queue.map { it.videoId })
+        assertEquals(0, emptyNext.currentIndex)
+
+        val active = QueueManager()
+        active.setQueue(listOf(song("1"), song("2")), startIndex = 0)
+        active.playNextAll(listOf(song("A"), song("B")))
+        assertEquals(listOf("1", "A", "B", "2"), active.queue.map { it.videoId })
+        assertEquals(0, active.currentIndex)
+
+        active.addAllToQueue(listOf(song("X"), song("Y")))
+        assertEquals(listOf("1", "A", "B", "2", "X", "Y"), active.queue.map { it.videoId })
+        assertEquals(0, active.currentIndex)
+    }
 }

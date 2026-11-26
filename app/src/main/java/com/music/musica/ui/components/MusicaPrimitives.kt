@@ -289,10 +289,17 @@ fun ShimmerBox(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(10.dp),
     reduceAnimation: Boolean = false,
+    onDarkBackdrop: Boolean = false,
 ) {
-    val baseColor = MaterialTheme.colorScheme.surfaceVariant
-    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val highlight = if (isDark) Color.White.copy(alpha = 0.09f) else Color.White.copy(alpha = 0.65f)
+    val isDark = onDarkBackdrop || MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val baseColor = if (onDarkBackdrop) Color.White.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant
+    val highlight = if (onDarkBackdrop) {
+        Color.White.copy(alpha = 0.24f)
+    } else if (isDark) {
+        Color.White.copy(alpha = 0.09f)
+    } else {
+        Color.White.copy(alpha = 0.65f)
+    }
 
     if (reduceAnimation) {
         Box(modifier = modifier.clip(shape).background(baseColor))
@@ -441,7 +448,10 @@ fun DetailSkeleton(reduceAnimation: Boolean = false) {
 }
 
 @Composable
-fun LyricsSkeleton(reduceAnimation: Boolean = false) {
+fun LyricsSkeleton(
+    reduceAnimation: Boolean = false,
+    onDarkBackdrop: Boolean = true,
+) {
     val widths = floatArrayOf(0.76f, 0.58f, 0.88f, 0.64f, 0.82f, 0.50f, 0.72f)
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 48.dp),
@@ -452,6 +462,7 @@ fun LyricsSkeleton(reduceAnimation: Boolean = false) {
                 modifier = Modifier.fillMaxWidth(frac).height(28.dp),
                 shape = RoundedCornerShape(8.dp),
                 reduceAnimation = reduceAnimation,
+                onDarkBackdrop = onDarkBackdrop,
             )
         }
     }

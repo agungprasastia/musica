@@ -83,6 +83,7 @@ fun DownloadsScreen(
     val waitingForWifi = wifiOnlyDownloads && networkType != NetworkType.WIFI
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val singlesTitle = stringResource(R.string.downloads_singles_collection)
+    val offlineBadge = stringResource(R.string.downloads_badge_offline)
     val collections = remember(downloads, singlesTitle) {
         DownloadQueueCoordinator.groupByCollection(downloads, singlesTitle)
     }
@@ -220,7 +221,7 @@ fun DownloadsScreen(
                                                 R.string.downloads_status_downloading,
                                                 item.progressPercent,
                                             )
-                                            DownloadState.COMPLETED -> "${item.song.artistText} • ${formatMegabytes(item.fileSizeBytes)}"
+                                            DownloadState.COMPLETED -> "${item.song.artistText} • ${formatMegabytes(item.fileSizeBytes, offlineBadge)}"
                                             DownloadState.FAILED -> stringResource(R.string.downloads_status_failed)
                                             DownloadState.NOT_DOWNLOADED -> ""
                                         },
@@ -320,7 +321,7 @@ fun DownloadsScreen(
                                             R.string.downloads_collection_summary,
                                             playable.size,
                                             group.items.size,
-                                            formatMegabytes(group.totalSizeBytes),
+                                            formatMegabytes(group.totalSizeBytes, offlineBadge),
                                         ),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -352,8 +353,8 @@ fun DownloadsScreen(
     }
 }
 
-private fun formatMegabytes(bytes: Long): String {
-    if (bytes <= 0L) return "Offline"
+private fun formatMegabytes(bytes: Long, offlineLabel: String): String {
+    if (bytes <= 0L) return offlineLabel
     val mb = bytes / (1024.0 * 1024.0)
     return "%.1f MB".format(mb)
 }

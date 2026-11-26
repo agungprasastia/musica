@@ -74,6 +74,17 @@ class QueueManager(
         unshuffledOrder = unshuffledOrder + song
     }
 
+    fun playNextAll(songs: List<Song>) {
+        if (songs.isEmpty()) return
+        if (_queue.isEmpty()) {
+            setQueue(songs, 0, shuffled = false)
+            return
+        }
+        val insertAt = (currentIndex + 1).coerceIn(0, _queue.size)
+        _queue.addAll(insertAt, songs)
+        unshuffledOrder = unshuffledOrder + songs
+    }
+
     fun addToQueue(song: Song) {
         if (_queue.isEmpty()) {
             setQueue(listOf(song), 0)
@@ -81,6 +92,16 @@ class QueueManager(
         }
         _queue.add(song)
         unshuffledOrder = unshuffledOrder + song
+    }
+
+    fun addAllToQueue(songs: List<Song>) {
+        if (songs.isEmpty()) return
+        if (_queue.isEmpty()) {
+            setQueue(songs, 0, shuffled = false)
+            return
+        }
+        _queue.addAll(songs)
+        unshuffledOrder = unshuffledOrder + songs
     }
 
     fun appendSongs(songs: List<Song>) {

@@ -4,6 +4,7 @@ import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -11,6 +12,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.security.SecureRandom
+import java.util.concurrent.atomic.AtomicLong
 
 data class PlaybackTrackingUrls(
     val playbackUrl: String,
@@ -61,6 +63,7 @@ class PlaybackTracker(
     )
 
     private val lock = Mutex()
+    private val generation = AtomicLong(0L)
 
     @Volatile
     private var session: ActiveSession? = null
@@ -68,13 +71,18 @@ class PlaybackTracker(
     @Volatile
     private var openingVideoId: String? = null
 
+    @Volatile
+    private var openSessionJob: Job? = null
+
     fun onPlaying(videoId: String) {
         if (!canTrack(videoId)) return
         if (session?.videoId == videoId || openingVideoId == videoId) return
+        val gen = generation.incrementAndGet()
+        openSessionJob?.cancel()
         openingVideoId = videoId
-        scope.launch {
+        openSessionJob = scope.launch {
             try {
-                openSession(videoId)
+                openSession(videoId, gen)
             } catch (ce: CancellationException) {
                 throw ce
             } catch (t: Throwable) {
@@ -119,6 +127,10 @@ class PlaybackTracker(
     }
 
     fun onTrackEnded(positionSeconds: Long) {
+        generation.incrementAndGet()
+        openSessionJob?.cancel()
+        openSessionJob = null
+        openingVideoId = null
         val closing = session ?: return
         session = null
         if (!isSyncEnabled() || !isSignedIn() || !isOnline()) return
@@ -131,6 +143,9 @@ class PlaybackTracker(
     }
 
     fun reset() {
+        generation.incrementAndGet()
+        openSessionJob?.cancel()
+        openSessionJob = null
         session = null
         openingVideoId = null
     }
@@ -141,9 +156,10 @@ class PlaybackTracker(
             isOnline() &&
             isSyncEnabled()
 
-    internal suspend fun openSession(videoId: String) = lock.withLock {
-        if (!canTrack(videoId)) return@withLock
+    internal suspend fun openSession(videoId: String, expectedGen: Long = generation.get()) = lock.withLock {
+        if (expectedGen != generation.get() || !canTrack(videoId)) return@withLock
         val urls = transport.fetchTracking(videoId) ?: return@withLock
+        if (expectedGen != generation.get() || !canTrack(videoId)) return@withLock
         val cpn = cpnGenerator()
         transport.ping(
             baseUrl = urls.playbackUrl,
@@ -154,7 +170,9 @@ class PlaybackTracker(
                 "rt" to "0",
             ),
         )
-        session = ActiveSession(videoId = videoId, cpn = cpn, urls = urls)
+        if (expectedGen == generation.get()) {
+            session = ActiveSession(videoId = videoId, cpn = cpn, urls = urls)
+        }
     }
 
     private suspend fun flushWatchtime(

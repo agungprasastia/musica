@@ -151,9 +151,21 @@ class YtMusicRepository(
             }
         }
 
-    suspend fun loadDetailContinuation(browseId: String, continuation: String): Result<Pair<List<Song>, String?>> =
+    suspend fun loadDetailContinuation(
+        browseId: String,
+        continuation: String,
+        fallbackCover: String? = null,
+        fallbackAlbum: com.music.musica.core.model.AlbumRef? = null,
+        fallbackArtist: com.music.musica.core.model.ArtistRef? = null,
+    ): Result<Pair<List<Song>, String?>> =
         runCatching {
-            client.browseDetailContinuation(browseId, continuation)
+            client.browseDetailContinuation(
+                browseId = browseId,
+                continuation = continuation,
+                fallbackCover = fallbackCover,
+                fallbackAlbum = fallbackAlbum,
+                fallbackArtist = fallbackArtist,
+            )
         }
 
     suspend fun search(query: String, filter: SearchFilter, continuation: String? = null): Result<SearchPage> =
@@ -201,6 +213,15 @@ class YtMusicRepository(
 
     suspend fun ratePlaylist(playlistId: String, like: Boolean): Boolean =
         runCatching { client.ratePlaylist(playlistId, like) }.getOrDefault(false)
+
+    fun invalidateDetail(browseId: String) {
+        val clean = browseId.removePrefix("VL")
+        detailCache.keys.removeIf { key ->
+            key.startsWith("$browseId:") ||
+                key.startsWith("$clean:") ||
+                key.startsWith("VL$clean:")
+        }
+    }
 
     fun clearCache() {
         detailCache.clear()

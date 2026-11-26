@@ -53,8 +53,10 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -146,6 +148,11 @@ fun DetailScreen(
         reduceAnimation = reduceAnimation,
     )
     val listState = rememberLazyListState()
+    LaunchedEffect(page?.browseId) {
+        if (listState.firstVisibleItemIndex != 0 || listState.firstVisibleItemScrollOffset != 0) {
+            listState.scrollToItem(0)
+        }
+    }
     val showStickyTitle by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 280 }
     }
@@ -158,15 +165,19 @@ fun DetailScreen(
     val detailHazeState = rememberHazeState()
 
     val hasContinuation = !page?.continuation.isNullOrBlank()
-    LaunchedEffect(listState, hasContinuation, isLoadingMore) {
-        if (!hasContinuation || isLoadingMore) return@LaunchedEffect
+    val currentLoadingMore by rememberUpdatedState(isLoadingMore)
+    val currentOnLoadMore by rememberUpdatedState(onLoadMoreTracks)
+    LaunchedEffect(listState, page?.browseId, hasContinuation) {
+        if (!hasContinuation) return@LaunchedEffect
         snapshotFlow {
             val layout = listState.layoutInfo
             val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: 0
             layout.totalItemsCount > 0 && lastVisible >= layout.totalItemsCount - 6
-        }.collect { nearEnd ->
-            if (nearEnd) onLoadMoreTracks()
         }
+            .distinctUntilChanged()
+            .collect { nearEnd ->
+                if (nearEnd && !currentLoadingMore) currentOnLoadMore()
+            }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -491,6 +502,30 @@ fun DetailScreen(
             }
         }
 
+        // ---- Soft Top Fade Scrim when scrolled so floating bar & status bar never collide with tracks ----
+        AnimatedVisibility(
+            visible = showStickyTitle,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            0.00f to palette.background,
+                            0.74f to palette.background.copy(alpha = 0.94f),
+                            1.00f to Color.Transparent,
+                        ),
+                    )
+                    .statusBarsPadding()
+                    .height(84.dp),
+            )
+        }
+
         // ---- Floating Circular Liquid Glass Top Bar with Collapsing Sticky Title ----
         Row(
             modifier = Modifier
@@ -516,11 +551,14 @@ fun DetailScreen(
                 exit = fadeOut(),
                 modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
             ) {
+                val pillShape = RoundedCornerShape(percent = 50)
                 Box(
                     modifier = Modifier
+                        .clip(pillShape)
+                        .background(palette.background.copy(alpha = 0.72f))
                         .frostedGlass(
                             hazeState = detailHazeState,
-                            shape = RoundedCornerShape(percent = 50),
+                            shape = pillShape,
                             enabled = frostedGlassEnabled,
                         )
                         .padding(horizontal = 16.dp, vertical = 10.dp),
@@ -607,7 +645,10 @@ private fun ArtistHeroHeader(
     onPlay: () -> Unit,
     onShuffle: () -> Unit,
 ) {
-    val coverUrl = remember(detail.thumbnailUrl) { upsizeArtworkUrl(detail.thumbnailUrl, 900) }
+    var useRawFallback by remember(detail.thumbnailUrl) { mutableStateOf(false) }
+    val coverUrl = remember(detail.thumbnailUrl, useRawFallback) {
+        if (useRawFallback) detail.thumbnailUrl else upsizeArtworkUrl(detail.thumbnailUrl, 900)
+    }
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -622,6 +663,11 @@ private fun ArtistHeroHeader(
                     model = coverUrl,
                     contentDescription = detail.title,
                     contentScale = ContentScale.Crop,
+                    onError = {
+                        if (!useRawFallback && coverUrl != detail.thumbnailUrl) {
+                            useRawFallback = true
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
@@ -630,8 +676,9 @@ private fun ArtistHeroHeader(
                             drawRect(
                                 brush = Brush.verticalGradient(
                                     0.00f to Color.Black,
-                                    0.64f to Color.Black,
-                                    0.88f to Color.Black.copy(alpha = 0.35f),
+                                    0.54f to Color.Black,
+                                    0.80f to Color.Black.copy(alpha = 0.28f),
+                                    0.94f to Color.Transparent,
                                     1.00f to Color.Transparent,
                                 ),
                                 blendMode = BlendMode.DstIn,
@@ -639,6 +686,18 @@ private fun ArtistHeroHeader(
                         },
                 )
             }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0.55f to Color.Transparent,
+                            0.84f to palette.background.copy(alpha = 0.72f),
+                            1.00f to palette.background,
+                        ),
+                    ),
+            )
 
             Column(
                 modifier = Modifier
@@ -816,10 +875,19 @@ private fun ReleaseHeroHeader(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         if (fullBleed && !detail.thumbnailUrl.isNullOrBlank()) {
+            var useRawFallback by remember(detail.thumbnailUrl) { mutableStateOf(false) }
+            val fullBleedUrl = remember(detail.thumbnailUrl, useRawFallback) {
+                if (useRawFallback) detail.thumbnailUrl else upsizeArtworkUrl(detail.thumbnailUrl, 900)
+            }
             AsyncImage(
-                model = upsizeArtworkUrl(detail.thumbnailUrl, 900),
+                model = fullBleedUrl,
                 contentDescription = detail.title,
                 contentScale = ContentScale.Crop,
+                onError = {
+                    if (!useRawFallback && fullBleedUrl != detail.thumbnailUrl) {
+                        useRawFallback = true
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)

@@ -105,6 +105,9 @@ interface PlaylistDao {
     @Query("DELETE FROM playlist_songs WHERE playlistId = :playlistId AND videoId = :videoId")
     suspend fun removeSongFromPlaylist(playlistId: String, videoId: String)
 
+    @Query("DELETE FROM playlist_songs WHERE playlistId = :playlistId")
+    suspend fun clearSongsInPlaylist(playlistId: String)
+
     @Query("SELECT COALESCE(MAX(position), -1) + 1 FROM playlist_songs WHERE playlistId = :playlistId")
     suspend fun nextPosition(playlistId: String): Int
 

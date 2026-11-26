@@ -42,6 +42,7 @@ class FullBackupSerializerTest {
                     isPinned = true,
                     pinnedAtMs = 1_710_000_000_000L,
                     trackVideoIds = listOf("abc12345678", "xyz98765432"),
+                    trackSetVideoIds = mapOf("abc12345678" to "SET_VID_1"),
                 ),
             ),
             playHistory = listOf(
@@ -71,6 +72,7 @@ class FullBackupSerializerTest {
         assertEquals(1, decoded.playlists.size)
         assertTrue(decoded.playlists[0].isPinned)
         assertEquals(listOf("abc12345678", "xyz98765432"), decoded.playlists[0].trackVideoIds)
+        assertEquals("SET_VID_1", decoded.playlists[0].trackSetVideoIds["abc12345678"])
         assertEquals(1, decoded.playHistory.size)
         assertEquals(1, decoded.subscribedArtists.size)
         assertEquals(1, decoded.savedCollections.size)
@@ -93,5 +95,15 @@ class FullBackupSerializerTest {
         assertEquals(8, settings.crossfadeSeconds)
         assertEquals(768, settings.audioCacheLimitMb)
         assertTrue(settings.skipSilence)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsEmptyObjectJsonAsBackup() {
+        FullBackupSerializer.parse("{}")
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsUnrelatedJsonObjectAsBackup() {
+        FullBackupSerializer.parse("""{"foo":"bar","count":42}""")
     }
 }

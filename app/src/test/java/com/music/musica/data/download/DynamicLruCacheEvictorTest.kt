@@ -110,4 +110,28 @@ class DynamicLruCacheEvictorTest {
 
         assertEquals(listOf(s1), removed)
     }
+
+    @Test
+    fun evictCacheTerminatesWhenCacheDoesNotRemoveSpan() {
+        val evictor = DynamicLruCacheEvictor(
+            maxBytes = 10L,
+            headBytes = 0L,
+            headBudgetBytes = 0L,
+        )
+        var calls = 0
+        val stubbornCache = Proxy.newProxyInstance(
+            Cache::class.java.classLoader,
+            arrayOf(Cache::class.java),
+        ) { _, method, _ ->
+            if (method.name == "removeSpan") {
+                calls++
+                null // intentionally does NOT invoke evictor.onSpanRemoved
+            } else {
+                throw UnsupportedOperationException(method.name)
+            }
+        } as Cache
+
+        evictor.onSpanAdded(stubbornCache, span("stuck", position = 0L, length = 30L, touchedAt = 1L))
+        assertEquals(1, calls)
+    }
 }

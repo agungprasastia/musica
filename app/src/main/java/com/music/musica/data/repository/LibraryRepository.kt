@@ -118,7 +118,14 @@ class LibraryRepository(
             db.savedCollectionDao().delete(browseId)
         }
         if (isSignedIn()) {
-            ytMusicRepository.ratePlaylist(browseId, like = next)
+            val remotePlaylistId = when {
+                type == BrowseType.ALBUM && browseId.startsWith("MPREb_") ->
+                    ytMusicRepository.loadDetail(browseId).getOrNull()?.audioPlaylistId
+                else -> browseId
+            }
+            if (!remotePlaylistId.isNullOrBlank()) {
+                ytMusicRepository.ratePlaylist(remotePlaylistId, like = next)
+            }
         }
         return next
     }
@@ -137,26 +144,31 @@ class LibraryRepository(
         return nowDisliked
     }
 
-    suspend fun renamePlaylist(playlistId: String, newTitle: String, description: String = "") {
+    suspend fun renamePlaylist(playlistId: String, newTitle: String, description: String? = null) {
         val cleanTitle = newTitle.trim()
         if (cleanTitle.isEmpty()) return
-        val existing = db.playlistDao().getPlaylist(playlistId)
+        val cleanId = playlistId.removePrefix("VL")
+        val existing = db.playlistDao().getPlaylist(playlistId) ?: db.playlistDao().getPlaylist(cleanId)
+        val targetId = existing?.playlistId ?: playlistId
+        val nextDescription = description?.trim() ?: existing?.description.orEmpty()
         db.playlistDao().renamePlaylist(
-            playlistId = playlistId,
+            playlistId = targetId,
             title = cleanTitle,
-            description = description.trim(),
+            description = nextDescription,
             updatedAtMs = System.currentTimeMillis(),
         )
         if (existing?.isRemoteYtm == true && isSignedIn()) {
-            ytMusicRepository.renameRemotePlaylist(playlistId, cleanTitle, description.trim())
+            ytMusicRepository.renameRemotePlaylist(targetId, cleanTitle, nextDescription)
         }
     }
 
     suspend fun removeSongFromPlaylist(playlistId: String, song: Song) {
-        db.playlistDao().removeSongFromPlaylist(playlistId, song.videoId)
-        val playlist = db.playlistDao().getPlaylist(playlistId)
-        if (playlist?.isRemoteYtm == true && isSignedIn()) {
-            ytMusicRepository.removeSongFromRemotePlaylist(playlistId, song.videoId, song.setVideoId)
+        val cleanId = playlistId.removePrefix("VL")
+        val existing = db.playlistDao().getPlaylist(playlistId) ?: db.playlistDao().getPlaylist(cleanId)
+        val targetId = existing?.playlistId ?: cleanId
+        db.playlistDao().removeSongFromPlaylist(targetId, song.videoId)
+        if (existing?.isRemoteYtm == true && isSignedIn()) {
+            ytMusicRepository.removeSongFromRemotePlaylist(targetId, song.videoId, song.setVideoId)
         }
     }
 

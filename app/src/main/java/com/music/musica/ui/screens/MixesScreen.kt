@@ -36,13 +36,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -288,7 +292,11 @@ private fun BlurredStationTile(
             .aspectRatio(1f)
             .clip(STATION_SHAPE)
             .thumbnailBorder(STATION_SHAPE)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(Color(0xFF2D2E38), Color(0xFF1A1B22)),
+                ),
+            )
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick?.let { menu ->
@@ -441,7 +449,10 @@ private fun MixFeatureCard(
         reduceAnimation = reduceAnimation,
     )
     val haptics = LocalHapticFeedback.current
-    val coverUrl = remember(item.thumbnailUrl) { upsizeArtworkUrl(item.thumbnailUrl, 544) }
+    var useRawFallback by remember(item.thumbnailUrl) { mutableStateOf(false) }
+    val coverUrl = remember(item.thumbnailUrl, useRawFallback) {
+        if (useRawFallback) item.thumbnailUrl else upsizeArtworkUrl(item.thumbnailUrl, 544)
+    }
 
     Column(
         modifier = Modifier
@@ -470,6 +481,11 @@ private fun MixFeatureCard(
                     model = coverUrl,
                     contentDescription = item.title,
                     contentScale = ContentScale.Crop,
+                    onError = {
+                        if (!useRawFallback && coverUrl != item.thumbnailUrl) {
+                            useRawFallback = true
+                        }
+                    },
                     modifier = Modifier.fillMaxSize(),
                 )
             }

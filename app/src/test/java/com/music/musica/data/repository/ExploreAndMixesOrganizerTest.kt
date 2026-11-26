@@ -202,4 +202,20 @@ class ExploreAndMixesOrganizerTest {
         assertEquals(listOf("My Supermix", "Discover Mix"), parsed.map { it.title })
         assertTrue(parsed.all { it is ShelfItem.Playlist })
     }
+
+    @Test
+    fun buildCuratedGuestMixes_deduplicatesIdenticalStationTitlesAcrossDifferentIds() {
+        val home = listOf(
+            HomeShelf(
+                title = "Pilihan Cepat",
+                items = listOf(
+                    ShelfItem.Playlist("VL_a", "Laut Kidul", thumbnailUrl = "https://img/a"),
+                    ShelfItem.Playlist("VL_b", "laut kidul ", thumbnailUrl = "https://img/b"),
+                    ShelfItem.Playlist("VL_c", "Kembali Pulang", thumbnailUrl = "https://img/c"),
+                ),
+            ),
+        )
+        val feed = ExploreAndMixesOrganizer.buildCuratedGuestMixes(home, emptyList())
+        assertEquals(listOf("Laut Kidul", "Kembali Pulang"), feed.stations.map { it.title })
+    }
 }

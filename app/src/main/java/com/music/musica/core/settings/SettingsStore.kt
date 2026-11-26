@@ -261,6 +261,7 @@ class SettingsStore internal constructor(
             prefs[Keys.AUDIO_CACHE_LIMIT_MB] = restored.audioCacheLimitMb.coerceIn(128, 4096)
             prefs[Keys.FROSTED_GLASS] = restored.frostedGlassEnabled
             prefs[Keys.REDUCE_ANIMATION] = restored.reduceAnimation
+            prefs[Keys.APP_LANGUAGE] = restored.appLanguage.name
             prefs[Keys.WIFI_QUALITY] = restored.wifiQuality.name
             prefs[Keys.CELLULAR_QUALITY] = restored.cellularQuality.name
             prefs[Keys.DOWNLOAD_QUALITY] = restored.downloadQuality.name

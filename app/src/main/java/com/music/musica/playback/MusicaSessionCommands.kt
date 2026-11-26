@@ -18,7 +18,9 @@ internal object MusicaSessionCommands {
     const val CMD_PLAY_QUEUE = "com.music.musica.cmd.PLAY_QUEUE"
     const val CMD_SELECT_INDEX = "com.music.musica.cmd.SELECT_INDEX"
     const val CMD_PLAY_NEXT = "com.music.musica.cmd.PLAY_NEXT"
+    const val CMD_PLAY_NEXT_LIST = "com.music.musica.cmd.PLAY_NEXT_LIST"
     const val CMD_ADD_TO_QUEUE = "com.music.musica.cmd.ADD_TO_QUEUE"
+    const val CMD_ADD_TO_QUEUE_LIST = "com.music.musica.cmd.ADD_TO_QUEUE_LIST"
     const val CMD_MOVE_ITEM = "com.music.musica.cmd.MOVE_ITEM"
     const val CMD_REMOVE_ITEM = "com.music.musica.cmd.REMOVE_ITEM"
     const val CMD_CLEAR_UPCOMING = "com.music.musica.cmd.CLEAR_UPCOMING"
@@ -49,7 +51,9 @@ internal object MusicaSessionCommands {
         CMD_PLAY_QUEUE,
         CMD_SELECT_INDEX,
         CMD_PLAY_NEXT,
+        CMD_PLAY_NEXT_LIST,
         CMD_ADD_TO_QUEUE,
+        CMD_ADD_TO_QUEUE_LIST,
         CMD_MOVE_ITEM,
         CMD_REMOVE_ITEM,
         CMD_CLEAR_UPCOMING,

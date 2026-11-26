@@ -128,6 +128,16 @@ class MusicaPlaybackService : MediaSessionService() {
     // Guards against reacting to our own setMediaItems() calls in onMediaItemTransition
     private var suppressNextTransition: Boolean = false
 
+    // Tracks the sleepAfterTrack value already applied to ExoPlayer's timeline
+    private var appliedSleepAfterTrack: Boolean = false
+
+    // Tracks the last videoId whose stream resolution threw so onPlayerError does not blame currentSong
+    @Volatile
+    private var lastResolveFailedVideoId: String? = null
+
+    @Volatile
+    private var lastResolveFailedAtMs: Long = 0L
+
     private val container by lazy { (application as MusicaApplication).container }
 
     private val mediaAudioAttributes = AudioAttributes.Builder()
@@ -198,6 +208,9 @@ class MusicaPlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        buildLastPlayedSnapshot()?.let { snapshot ->
+            pendingRestoredSnapshot = snapshot
+        }
         persistLastPlayedNow()
         container.playbackTracker.onTrackEnded(activePlayer.currentPosition.coerceAtLeast(0L) / 1_000L)
         recordCompletedListeningSession()
@@ -275,11 +288,25 @@ class MusicaPlaybackService : MediaSessionService() {
                 playNext(song)
             }
 
+            MusicaSessionCommands.CMD_PLAY_NEXT_LIST -> {
+                val payload = MusicaSessionCommands.takeQueuePayload(
+                    args.getString(MusicaSessionCommands.ARG_HANDOFF_ID),
+                ) ?: return
+                playNextAll(payload.songs)
+            }
+
             MusicaSessionCommands.CMD_ADD_TO_QUEUE -> {
                 val song = MusicaSessionCommands.takeSongPayload(
                     args.getString(MusicaSessionCommands.ARG_HANDOFF_ID),
                 ) ?: return
                 addToQueue(song)
+            }
+
+            MusicaSessionCommands.CMD_ADD_TO_QUEUE_LIST -> {
+                val payload = MusicaSessionCommands.takeQueuePayload(
+                    args.getString(MusicaSessionCommands.ARG_HANDOFF_ID),
+                ) ?: return
+                addAllToQueue(payload.songs)
             }
 
             MusicaSessionCommands.CMD_MOVE_ITEM -> {
@@ -367,9 +394,34 @@ class MusicaPlaybackService : MediaSessionService() {
         scheduleSaveLastPlayed()
     }
 
+    fun playNextAll(songs: List<Song>) {
+        if (songs.isEmpty()) return
+        cancelCrossfade()
+        val wasEmpty = queueManager.queue.isEmpty()
+        queueManager.playNextAll(songs)
+        if (!wasEmpty) {
+            syncUpcomingTimelineItems()
+            prefetchNextTrack()
+        }
+        syncUiState()
+        scheduleSaveLastPlayed()
+    }
+
     fun addToQueue(song: Song) {
         val wasEmpty = queueManager.queue.isEmpty()
         queueManager.addToQueue(song)
+        if (!wasEmpty) {
+            syncUpcomingTimelineItems()
+            prefetchNextTrack()
+        }
+        syncUiState()
+        scheduleSaveLastPlayed()
+    }
+
+    fun addAllToQueue(songs: List<Song>) {
+        if (songs.isEmpty()) return
+        val wasEmpty = queueManager.queue.isEmpty()
+        queueManager.addAllToQueue(songs)
         if (!wasEmpty) {
             syncUpcomingTimelineItems()
             prefetchNextTrack()
@@ -425,17 +477,22 @@ class MusicaPlaybackService : MediaSessionService() {
     fun togglePlayPause() {
         cancelCrossfade()
         cancelSleepFade()
-        if (activePlayer.isPlaying) {
+        if (activePlayer.playWhenReady && activePlayer.playbackState != Player.STATE_ENDED) {
             activePlayer.pause()
             scheduleSaveLastPlayed(immediate = true)
         } else {
-            if (activePlayer.playbackState == Player.STATE_IDLE && queueManager.currentSong != null) {
-                val resumeMs = pendingResumePositionMs
-                pendingResumePositionMs = 0L
-                consecutiveAutoSkips = 0
-                loadCurrentFromQueue(autoPlay = true, resumeAtMs = resumeMs)
-            } else {
-                activePlayer.play()
+            when {
+                activePlayer.playbackState == Player.STATE_IDLE && queueManager.currentSong != null -> {
+                    val resumeMs = pendingResumePositionMs
+                    pendingResumePositionMs = 0L
+                    consecutiveAutoSkips = 0
+                    loadCurrentFromQueue(autoPlay = true, resumeAtMs = resumeMs)
+                }
+                activePlayer.playbackState == Player.STATE_ENDED && queueManager.currentSong != null -> {
+                    activePlayer.seekTo(0L)
+                    activePlayer.play()
+                }
+                else -> activePlayer.play()
             }
         }
         syncUiState()
@@ -579,7 +636,8 @@ class MusicaPlaybackService : MediaSessionService() {
     }
 
     fun updateSleepTimerUi(remainingMs: Long?, afterTrack: Boolean) {
-        val prevAfterTrack = _uiState.value.sleepAfterTrack
+        val prevAfterTrack = appliedSleepAfterTrack
+        appliedSleepAfterTrack = afterTrack
         _uiState.update { it.copy(sleepTimerRemainingMs = remainingMs, sleepAfterTrack = afterTrack) }
         if (remainingMs == null && !afterTrack) {
             cancelSleepFade()
@@ -617,7 +675,9 @@ class MusicaPlaybackService : MediaSessionService() {
             override fun hasPreviousMediaItem(): Boolean = queueManager.queue.isNotEmpty()
 
             override fun play() {
-                if (activePlayer.playbackState == Player.STATE_IDLE && queueManager.currentSong != null) {
+                if ((activePlayer.playbackState == Player.STATE_IDLE || activePlayer.playbackState == Player.STATE_ENDED) &&
+                    queueManager.currentSong != null
+                ) {
                     togglePlayPause()
                 } else {
                     cancelSleepFade()
@@ -630,9 +690,7 @@ class MusicaPlaybackService : MediaSessionService() {
             override fun seekToPrevious() = skipPrevious()
             override fun seekToPreviousMediaItem() = skipPrevious()
             override fun seekTo(positionMs: Long) {
-                cancelCrossfade()
-                cancelSleepFade()
-                super.seekTo(positionMs)
+                this@MusicaPlaybackService.seekTo(positionMs)
             }
         }
     }
@@ -642,6 +700,7 @@ class MusicaPlaybackService : MediaSessionService() {
     private fun observeSettings() {
         serviceScope.launch {
             container.settingsStore.settings.collect { settings ->
+                val prevCrossfade = _uiState.value.crossfadeSeconds
                 if (settings.crossfadeSeconds <= 0 && crossfadeStateMachine.status.phase == CrossfadePhase.FADING) {
                     cancelCrossfade()
                 }
@@ -656,6 +715,9 @@ class MusicaPlaybackService : MediaSessionService() {
                         autoplayEnabled = settings.autoplayEnabled,
                         crossfadeSeconds = settings.crossfadeSeconds,
                     )
+                }
+                if ((prevCrossfade > 0) != (settings.crossfadeSeconds > 0)) {
+                    syncUpcomingTimelineItems()
                 }
             }
         }
@@ -673,6 +735,7 @@ class MusicaPlaybackService : MediaSessionService() {
 
                     // Only verified-complete downloads bypass network resolution.
                     if (container.audioCacheProvider.isDownloadCompleted(videoId)) {
+                        if (lastResolveFailedVideoId == videoId) lastResolveFailedVideoId = null
                         return dataSpec.buildUpon()
                             .setKey(videoId)
                             .build()
@@ -681,9 +744,12 @@ class MusicaPlaybackService : MediaSessionService() {
                     val resolved = runBlocking {
                         container.streamResolver.resolve(videoId)
                     }.getOrElse { err ->
+                        lastResolveFailedVideoId = videoId
+                        lastResolveFailedAtMs = System.currentTimeMillis()
                         throw IOException("Failed to resolve stream for $videoId", err)
                     }
 
+                    if (lastResolveFailedVideoId == videoId) lastResolveFailedVideoId = null
                     resolvedMetadata[videoId] = resolved
                     val headers = dataSpec.httpRequestHeaders.toMutableMap().apply {
                         putAll(resolved.headers)
@@ -755,6 +821,9 @@ class MusicaPlaybackService : MediaSessionService() {
                     recordCompletedListeningSession()
                     accumulatedPlayMs = 0L
                     playSegmentStartMs = if (activePlayer.isPlaying) System.currentTimeMillis() else 0L
+                    if (activePlayer.isPlaying) {
+                        queueManager.currentSong?.let { container.playbackTracker.onPlaying(it.videoId) }
+                    }
                     syncUiState()
                 }
 
@@ -765,6 +834,13 @@ class MusicaPlaybackService : MediaSessionService() {
                         activePlayer.pause()
                         syncUiState()
                         scheduleSaveLastPlayed(immediate = true)
+                        return
+                    }
+                    val fadingTarget = crossfadeStateMachine.status.targetIndex
+                    if (crossfadeStateMachine.status.phase == CrossfadePhase.FADING && fadingTarget != null) {
+                        crossfadeJob?.cancel()
+                        crossfadeJob = null
+                        completeCrossfadeSwap(fadingTarget)
                         return
                     }
                     // Gapless 0ms transition to the next item already prepared in ExoPlayer's Timeline!
@@ -780,7 +856,12 @@ class MusicaPlaybackService : MediaSessionService() {
                     retryCountForCurrent = 0
                     consecutiveAutoSkips = 0
 
-                    queueManager.currentSong?.let { updateNerdStatsBase(it.videoId) }
+                    queueManager.currentSong?.let { song ->
+                        updateNerdStatsBase(song.videoId)
+                        if (activePlayer.isPlaying) {
+                            container.playbackTracker.onPlaying(song.videoId)
+                        }
+                    }
                     val remainingInTimeline = activePlayer.mediaItemCount - 1 - activePlayer.currentMediaItemIndex
                     if (remainingInTimeline <= TIMELINE_TOP_UP_THRESHOLD) {
                         syncUpcomingTimelineItems()
@@ -826,6 +907,24 @@ class MusicaPlaybackService : MediaSessionService() {
             val song = queueManager.currentSong ?: return
             val resumePosition = activePlayer.currentPosition.coerceAtLeast(0L)
             Log.w(TAG, "ExoPlayer error for ${song.videoId}: ${error.errorCodeName}", error)
+
+            // Guard: if ExoPlayer failed while pre-buffering an UPCOMING timeline item (e.g., an
+            // un-downloaded track while offline or a geo-blocked next track), do NOT blame or skip
+            // the currently playing track — strip upcoming items and continue playing currentSong.
+            val failedVid = lastResolveFailedVideoId
+            val failedUpcoming = failedVid != null &&
+                failedVid != song.videoId &&
+                (System.currentTimeMillis() - lastResolveFailedAtMs) < 5_000L
+            if (failedUpcoming) {
+                lastResolveFailedVideoId = null
+                Log.w(TAG, "Ignoring upcoming prebuffer failure ($failedVid) while playing ${song.videoId}")
+                suppressNextTransition = true
+                activePlayer.setMediaItems(listOf(song.toMediaItem()), 0, resumePosition)
+                applyExoRepeatMode()
+                activePlayer.prepare()
+                activePlayer.playWhenReady = true
+                return
+            }
 
             val canRetry = !container.audioCacheProvider.isDownloadCompleted(song.videoId) &&
                 (lastRetriedVideoId != song.videoId || retryCountForCurrent < MAX_RETRIES_PER_TRACK)
@@ -917,22 +1016,31 @@ class MusicaPlaybackService : MediaSessionService() {
         prefetchNextTrack()
     }
 
+    private fun shouldIsolateSingleTrackTimeline(): Boolean =
+        _uiState.value.sleepAfterTrack || _uiState.value.crossfadeSeconds > 0
+
+    private fun canPreloadUpcomingTrack(song: Song): Boolean =
+        container.networkMonitor.isOnline || container.audioCacheProvider.isDownloadCompleted(song.videoId)
+
     private fun buildTimelineWindowFromCurrent(): List<MediaItem> {
         val queue = queueManager.queue
         val cur = queueManager.currentIndex
         if (cur !in queue.indices) return emptyList()
-        if (_uiState.value.sleepAfterTrack) {
+        if (shouldIsolateSingleTrackTimeline()) {
             return listOf(queue[cur].toMediaItem())
         }
         val endExclusive = minOf(queue.size, cur + 1 + UPCOMING_TIMELINE_COUNT)
         val items = ArrayList<MediaItem>(endExclusive - cur)
-        for (i in cur until endExclusive) {
+        items.add(queue[cur].toMediaItem())
+        for (i in (cur + 1) until endExclusive) {
+            if (!canPreloadUpcomingTrack(queue[i])) break
             items.add(queue[i].toMediaItem())
         }
         // When Repeat ALL is active and the queue wraps within our window, append head tracks seamlessly
-        if (queueManager.repeatMode == RepeatMode.ALL && queue.size > 1 && endExclusive == queue.size) {
+        if (queueManager.repeatMode == RepeatMode.ALL && queue.size > 1 && items.size == endExclusive - cur && endExclusive == queue.size) {
             val wrapCount = minOf(cur, UPCOMING_TIMELINE_COUNT - (items.size - 1)).coerceAtLeast(0)
             for (i in 0 until wrapCount) {
+                if (!canPreloadUpcomingTrack(queue[i])) break
                 items.add(queue[i].toMediaItem())
             }
         }
@@ -959,17 +1067,23 @@ class MusicaPlaybackService : MediaSessionService() {
             activePlayer.removeMediaItems(updatedCur + 1, activePlayer.mediaItemCount)
         }
 
-        if (!_uiState.value.sleepAfterTrack) {
+        if (!shouldIsolateSingleTrackTimeline()) {
             val queue = queueManager.queue
             val cur = queueManager.currentIndex
             val endExclusive = minOf(queue.size, cur + 1 + UPCOMING_TIMELINE_COUNT)
             val upcoming = ArrayList<MediaItem>()
+            var hitUnreachableOffline = false
             for (i in (cur + 1) until endExclusive) {
+                if (!canPreloadUpcomingTrack(queue[i])) {
+                    hitUnreachableOffline = true
+                    break
+                }
                 upcoming.add(queue[i].toMediaItem())
             }
-            if (queueManager.repeatMode == RepeatMode.ALL && queue.size > 1 && endExclusive == queue.size) {
+            if (!hitUnreachableOffline && queueManager.repeatMode == RepeatMode.ALL && queue.size > 1 && endExclusive == queue.size) {
                 val wrapCount = minOf(cur, UPCOMING_TIMELINE_COUNT - upcoming.size).coerceAtLeast(0)
                 for (i in 0 until wrapCount) {
+                    if (!canPreloadUpcomingTrack(queue[i])) break
                     upcoming.add(queue[i].toMediaItem())
                 }
             }
@@ -1049,6 +1163,7 @@ class MusicaPlaybackService : MediaSessionService() {
     }
 
     private fun maybeTriggerCrossfade(positionMs: Long, durationMs: Long) {
+        if (sleepFadeJob != null) return
         val fadeSec = _uiState.value.crossfadeSeconds
         val nextIdx = queueManager.nextIndex(manualSkip = false)
         val canStart = crossfadeStateMachine.canStart(
@@ -1097,10 +1212,22 @@ class MusicaPlaybackService : MediaSessionService() {
                 return@launch
             }
 
+            // Recompute remaining wall time after standby finishes buffering so the swap completes
+            // before activePlayer reaches EOF.
+            val speed = _uiState.value.playbackSpeed.coerceAtLeast(0.5f)
+            val remainingNowMs = if (activePlayer.duration > 0L) {
+                ((activePlayer.duration - activePlayer.currentPosition).coerceAtLeast(0L) / speed).toLong()
+            } else {
+                fadeDurationMs
+            }
+            val effectiveFadeMs = fadeDurationMs
+                .coerceAtMost((remainingNowMs - 150L).coerceAtLeast(400L))
+                .coerceAtLeast(400L)
+
             val startAt = System.currentTimeMillis()
             while (isActive) {
                 val elapsed = System.currentTimeMillis() - startAt
-                val progress = (elapsed.toFloat() / fadeDurationMs.coerceAtLeast(500L)).coerceIn(0f, 1f)
+                val progress = (elapsed.toFloat() / effectiveFadeMs).coerceIn(0f, 1f)
                 val completed = crossfadeStateMachine.advance(progress)
                 val st = crossfadeStateMachine.status
                 activePlayer.volume = st.outgoingGain
@@ -1144,7 +1271,12 @@ class MusicaPlaybackService : MediaSessionService() {
         consecutiveAutoSkips = 0
         crossfadeStateMachine.resetAfterSwap()
         syncUpcomingTimelineItems()
-        queueManager.currentSong?.let { updateNerdStatsBase(it.videoId) }
+        queueManager.currentSong?.let { song ->
+            updateNerdStatsBase(song.videoId)
+            if (activePlayer.isPlaying) {
+                container.playbackTracker.onPlaying(song.videoId)
+            }
+        }
         syncUiState()
         prefetchNextTrack()
         maybeFetchAutoplay()

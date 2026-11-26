@@ -1,5 +1,6 @@
 package com.music.musica.data.backup
 
+import androidx.room.withTransaction
 import com.music.musica.core.database.MusicaDatabase
 import com.music.musica.core.database.PlayHistoryEntity
 import com.music.musica.core.database.PlaylistEntity
@@ -43,6 +44,7 @@ data class PlaylistBackup(
     val isPinned: Boolean = false,
     val pinnedAtMs: Long = 0L,
     val trackVideoIds: List<String> = emptyList(),
+    val trackSetVideoIds: Map<String, String> = emptyMap(),
 )
 
 @Serializable
@@ -98,6 +100,34 @@ sealed interface ParsedBackup {
  */
 object FullBackupSerializer {
 
+    private val KNOWN_V1_SETTINGS_KEYS = setOf(
+        "onboardingCompleted",
+        "themeMode",
+        "playerTheme",
+        "fullBleedCoverArt",
+        "showVolumeSlider",
+        "showRemainingTime",
+        "blurUnfocusedLyrics",
+        "showLyricsPreviewStrip",
+        "sleepTimerFadeOut",
+        "audioCacheLimitMb",
+        "frostedGlassEnabled",
+        "reduceAnimation",
+        "appLanguage",
+        "wifiQuality",
+        "cellularQuality",
+        "downloadQuality",
+        "wifiOnlyDownloads",
+        "syncPlaybackHistoryToYtm",
+        "crossfadeSeconds",
+        "skipSilence",
+        "autoplayEnabled",
+        "playbackSpeed",
+        "preferWordSyncedLyrics",
+        "enabledLyricsSources",
+        "lyricsSourceOrder",
+    )
+
     fun encodeV2(backup: MusicaBackupV2): String =
         HttpClients.json.encodeToString(backup)
 
@@ -111,6 +141,9 @@ object FullBackupSerializer {
             val v2 = HttpClients.json.decodeFromString<MusicaBackupV2>(rawJson)
             ParsedBackup.FullV2(v2)
         } else {
+            if (obj.keys.none { it in KNOWN_V1_SETTINGS_KEYS }) {
+                throw IllegalArgumentException("Unrecognized backup JSON format")
+            }
             val v1Settings = HttpClients.json.decodeFromString<UserSettings>(rawJson)
             ParsedBackup.SettingsOnlyV1(v1Settings)
         }
@@ -141,6 +174,9 @@ object FullBackupSerializer {
 
         val crossRefsByPlaylist = db.playlistDao().getAllCrossRefs().groupBy { it.playlistId }
         val playlists = db.playlistDao().getAllPlaylists().map { pl ->
+            val orderedRefs = crossRefsByPlaylist[pl.playlistId]
+                .orEmpty()
+                .sortedBy { it.position }
             PlaylistBackup(
                 playlistId = pl.playlistId,
                 title = pl.title,
@@ -150,10 +186,10 @@ object FullBackupSerializer {
                 updatedAtMs = pl.updatedAtMs,
                 isPinned = pl.isPinned,
                 pinnedAtMs = pl.pinnedAtMs,
-                trackVideoIds = crossRefsByPlaylist[pl.playlistId]
-                    .orEmpty()
-                    .sortedBy { it.position }
-                    .map { it.videoId },
+                trackVideoIds = orderedRefs.map { it.videoId },
+                trackSetVideoIds = orderedRefs.mapNotNull { ref ->
+                    ref.setVideoId?.takeIf { it.isNotBlank() }?.let { ref.videoId to it }
+                }.toMap(),
             )
         }
 
@@ -209,89 +245,92 @@ object FullBackupSerializer {
 
             is ParsedBackup.FullV2 -> {
                 val data = parsed.data
-                settingsStore.restoreFrom(data.settings)
+                db.withTransaction {
+                    data.songs.forEach { s ->
+                        db.songDao().upsert(
+                            SongEntity(
+                                videoId = s.videoId,
+                                title = s.title,
+                                artistsJson = HttpClients.json.encodeToString(s.artists),
+                                albumName = s.albumName,
+                                albumBrowseId = s.albumBrowseId,
+                                durationMs = s.durationMs,
+                                thumbnailUrl = s.thumbnailUrl,
+                                isExplicit = s.isExplicit,
+                                isLiked = s.isLiked,
+                                likedAtMs = s.likedAtMs,
+                                isDisliked = s.isDisliked,
+                            ),
+                        )
+                    }
 
-                data.songs.forEach { s ->
-                    db.songDao().upsert(
-                        SongEntity(
-                            videoId = s.videoId,
-                            title = s.title,
-                            artistsJson = HttpClients.json.encodeToString(s.artists),
-                            albumName = s.albumName,
-                            albumBrowseId = s.albumBrowseId,
-                            durationMs = s.durationMs,
-                            thumbnailUrl = s.thumbnailUrl,
-                            isExplicit = s.isExplicit,
-                            isLiked = s.isLiked,
-                            likedAtMs = s.likedAtMs,
-                            isDisliked = s.isDisliked,
-                        ),
-                    )
-                }
-
-                data.playlists.forEach { pl ->
-                    db.playlistDao().upsertPlaylist(
-                        PlaylistEntity(
-                            playlistId = pl.playlistId,
-                            title = pl.title,
-                            description = pl.description,
-                            thumbnailUrl = pl.thumbnailUrl,
-                            isRemoteYtm = pl.isRemoteYtm,
-                            updatedAtMs = pl.updatedAtMs.takeIf { it > 0L } ?: System.currentTimeMillis(),
-                            isPinned = pl.isPinned,
-                            pinnedAtMs = pl.pinnedAtMs,
-                        ),
-                    )
-                    pl.trackVideoIds.forEachIndexed { idx, videoId ->
-                        db.playlistDao().addSongToPlaylist(
-                            PlaylistSongCrossRef(
+                    data.playlists.forEach { pl ->
+                        db.playlistDao().upsertPlaylist(
+                            PlaylistEntity(
                                 playlistId = pl.playlistId,
-                                videoId = videoId,
-                                position = idx,
+                                title = pl.title,
+                                description = pl.description,
+                                thumbnailUrl = pl.thumbnailUrl,
+                                isRemoteYtm = pl.isRemoteYtm,
+                                updatedAtMs = pl.updatedAtMs.takeIf { it > 0L } ?: System.currentTimeMillis(),
+                                isPinned = pl.isPinned,
+                                pinnedAtMs = pl.pinnedAtMs,
+                            ),
+                        )
+                        db.playlistDao().clearSongsInPlaylist(pl.playlistId)
+                        pl.trackVideoIds.forEachIndexed { idx, videoId ->
+                            db.playlistDao().addSongToPlaylist(
+                                PlaylistSongCrossRef(
+                                    playlistId = pl.playlistId,
+                                    videoId = videoId,
+                                    position = idx,
+                                    setVideoId = pl.trackSetVideoIds[videoId],
+                                ),
+                            )
+                        }
+                    }
+
+                    val existingKeys = db.historyDao().getAllHistoryRaw()
+                        .map { "${it.videoId}|${it.playedAtMs}" }
+                        .toHashSet()
+                    data.playHistory.forEach { h ->
+                        val key = "${h.videoId}|${h.playedAtMs}"
+                        if (existingKeys.add(key)) {
+                            db.historyDao().insert(
+                                PlayHistoryEntity(
+                                    videoId = h.videoId,
+                                    playedAtMs = h.playedAtMs,
+                                    listenedDurationMs = h.listenedDurationMs,
+                                ),
+                            )
+                        }
+                    }
+
+                    data.subscribedArtists.forEach { a ->
+                        db.subscribedArtistDao().upsert(
+                            SubscribedArtistEntity(
+                                browseId = a.browseId,
+                                name = a.name,
+                                thumbnailUrl = a.thumbnailUrl,
+                                subscribedAtMs = a.subscribedAtMs.takeIf { it > 0L } ?: System.currentTimeMillis(),
+                            ),
+                        )
+                    }
+
+                    data.savedCollections.forEach { c ->
+                        db.savedCollectionDao().upsert(
+                            SavedCollectionEntity(
+                                browseId = c.browseId,
+                                type = c.type,
+                                title = c.title,
+                                subtitle = c.subtitle,
+                                thumbnailUrl = c.thumbnailUrl,
+                                savedAtMs = c.savedAtMs.takeIf { it > 0L } ?: System.currentTimeMillis(),
                             ),
                         )
                     }
                 }
-
-                val existingKeys = db.historyDao().getAllHistoryRaw()
-                    .map { "${it.videoId}|${it.playedAtMs}" }
-                    .toHashSet()
-                data.playHistory.forEach { h ->
-                    val key = "${h.videoId}|${h.playedAtMs}"
-                    if (existingKeys.add(key)) {
-                        db.historyDao().insert(
-                            PlayHistoryEntity(
-                                videoId = h.videoId,
-                                playedAtMs = h.playedAtMs,
-                                listenedDurationMs = h.listenedDurationMs,
-                            ),
-                        )
-                    }
-                }
-
-                data.subscribedArtists.forEach { a ->
-                    db.subscribedArtistDao().upsert(
-                        SubscribedArtistEntity(
-                            browseId = a.browseId,
-                            name = a.name,
-                            thumbnailUrl = a.thumbnailUrl,
-                            subscribedAtMs = a.subscribedAtMs.takeIf { it > 0L } ?: System.currentTimeMillis(),
-                        ),
-                    )
-                }
-
-                data.savedCollections.forEach { c ->
-                    db.savedCollectionDao().upsert(
-                        SavedCollectionEntity(
-                            browseId = c.browseId,
-                            type = c.type,
-                            title = c.title,
-                            subtitle = c.subtitle,
-                            thumbnailUrl = c.thumbnailUrl,
-                            savedAtMs = c.savedAtMs.takeIf { it > 0L } ?: System.currentTimeMillis(),
-                        ),
-                    )
-                }
+                settingsStore.restoreFrom(data.settings)
             }
         }
         true

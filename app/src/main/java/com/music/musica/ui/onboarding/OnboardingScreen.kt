@@ -14,11 +14,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.music.musica.R
 import com.music.musica.ui.components.MeshGradientBackground
+import com.music.musica.ui.screens.MusicaBrandEmblem
 import com.music.musica.ui.theme.OnboardingMeshColors
 
 @Composable
@@ -68,11 +66,9 @@ fun OnboardingScreen(
                         .border(1.dp, Color.White.copy(alpha = 0.28f), CircleShape),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.MusicNote,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(44.dp),
+                    MusicaBrandEmblem(
+                        color = Color.White,
+                        modifier = Modifier.size(width = 48.dp, height = 34.dp),
                     )
                 }
 
