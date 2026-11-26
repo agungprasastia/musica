@@ -199,6 +199,7 @@ class MusicaPlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         persistLastPlayedNow()
+        container.playbackTracker.onTrackEnded(activePlayer.currentPosition.coerceAtLeast(0L) / 1_000L)
         recordCompletedListeningSession()
         cancelCrossfade()
         cancelSleepFade()
@@ -727,6 +728,9 @@ class MusicaPlaybackService : MediaSessionService() {
             if (isPlaying) {
                 consecutiveAutoSkips = 0
                 playSegmentStartMs = System.currentTimeMillis()
+                queueManager.currentSong?.let { song ->
+                    container.playbackTracker.onPlaying(song.videoId)
+                }
             } else {
                 flushPlaySegment()
                 if (crossfadeStateMachine.status.phase == CrossfadePhase.FADING &&
@@ -1032,6 +1036,11 @@ class MusicaPlaybackService : MediaSessionService() {
                     }
                     if (active) {
                         maybeTriggerCrossfade(position, duration)
+                        if (activePlayer.isPlaying) {
+                            queueManager.currentSong?.let { song ->
+                                container.playbackTracker.onProgress(song.videoId, position / 1_000L)
+                            }
+                        }
                     }
                 }
                 delay(if (active) 250L else 900L)
@@ -1239,6 +1248,9 @@ class MusicaPlaybackService : MediaSessionService() {
         val song = queueManager.currentSong ?: return
         val listenedMs = accumulatedPlayMs
         accumulatedPlayMs = 0L
+        container.playbackTracker.onTrackEnded(
+            (activePlayer.currentPosition.takeIf { it > 0L } ?: listenedMs) / 1_000L,
+        )
         if (listenedMs < 5_000L) return
         container.onTrackPlayed(song, listenedMs)
     }

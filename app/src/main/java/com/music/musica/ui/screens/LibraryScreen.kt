@@ -117,11 +117,13 @@ fun LibraryScreen(
     onOpenPlaylist: (UserPlaylist) -> Unit,
     onCreatePlaylist: (String) -> Unit,
     onTogglePinPlaylist: (String) -> Unit = {},
+    onPlaylistLongClick: ((UserPlaylist) -> Unit)? = null,
     onOpenDownloads: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenReplay: () -> Unit,
     onOpenLogin: () -> Unit,
     onItemClick: (ShelfItem) -> Unit,
+    onBrowseLongClick: ((ShelfItem) -> Unit)? = null,
     onSongMore: (Song) -> Unit,
     onPlayNext: (Song) -> Unit,
     onAddToQueue: (Song) -> Unit,
@@ -298,7 +300,11 @@ fun LibraryScreen(
                                         onClick = { onOpenPlaylist(playlist) },
                                         onLongClick = {
                                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            onTogglePinPlaylist(playlist.playlistId)
+                                            if (onPlaylistLongClick != null) {
+                                                onPlaylistLongClick(playlist)
+                                            } else {
+                                                onTogglePinPlaylist(playlist.playlistId)
+                                            }
                                         },
                                     ),
                             ) {
@@ -350,6 +356,7 @@ fun LibraryScreen(
                             downloadedIds = downloadedIds,
                             onItemClick = onItemClick,
                             onSongMore = onSongMore,
+                            onBrowseLongClick = onBrowseLongClick,
                             onPlayNext = onPlayNext,
                             onAddToQueue = onAddToQueue,
                         )
@@ -636,8 +643,14 @@ fun PlaylistPickerSheet(
                     Spacer(Modifier.width(14.dp))
                     Column {
                         Text(playlist.title, style = MaterialTheme.typography.titleMedium, color = fg)
+                        val countText = stringResource(R.string.library_songs_count, playlist.songCount)
+                        val meta = if (playlist.isRemoteYtm) {
+                            "${stringResource(R.string.library_ytm_playlist_badge)} · $countText"
+                        } else {
+                            countText
+                        }
                         Text(
-                            stringResource(R.string.library_songs_count, playlist.songCount),
+                            text = meta,
                             style = MaterialTheme.typography.bodySmall,
                             color = fg.copy(alpha = 0.65f),
                         )

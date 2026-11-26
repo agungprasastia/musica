@@ -25,7 +25,9 @@ import com.music.musica.core.settings.UserSettings
 import com.music.musica.data.download.AudioCacheProvider
 import com.music.musica.data.download.DownloadRepository
 import com.music.musica.data.download.MusicaDownloadService
+import com.music.musica.data.innertube.InnertubeTrackingTransport
 import com.music.musica.data.innertube.MusicaInnertubeClient
+import com.music.musica.data.innertube.PlaybackTracker
 import com.music.musica.data.lyrics.BetterLyricsProvider
 import com.music.musica.data.lyrics.LrclibProvider
 import com.music.musica.data.lyrics.LyricLine
@@ -194,6 +196,12 @@ class AppContainer(context: Context) {
     )
 
     val autoplayController: AutoplayController = AutoplayController(ytMusicRepository)
+    val playbackTracker: PlaybackTracker = PlaybackTracker(
+        transport = InnertubeTrackingTransport(innertubeClient),
+        isSignedIn = { authStore.isSignedIn },
+        isOnline = { networkMonitor.isOnline },
+        isSyncEnabled = { settingsState.value.syncPlaybackHistoryToYtm },
+    )
     val lastPlayedStore: LastPlayedStore = LastPlayedStore(appContext)
     val playerController: PlayerController = PlayerController(appContext)
 

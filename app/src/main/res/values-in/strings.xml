@@ -91,19 +91,36 @@
     <!-- Song Actions Menu -->
     <string name="menu_play_next">Putar Berikutnya</string>
     <string name="menu_add_to_queue">Tambah ke Antrean</string>
+    <string name="menu_start_radio">Mulai Radio</string>
     <string name="menu_like">Tambah ke Lagu Disukai</string>
     <string name="menu_unlike">Hapus dari Lagu Disukai</string>
+    <string name="menu_dislike">Tidak Suka</string>
+    <string name="menu_undislike">Batalkan Tidak Suka</string>
     <string name="menu_add_playlist">Tambah ke Playlist</string>
     <string name="menu_download">Unduh Offline</string>
     <string name="menu_remove_download">Hapus Unduhan</string>
+    <string name="menu_download_all">Unduh Semua</string>
+    <string name="menu_save_to_library">Simpan ke Koleksi</string>
+    <string name="menu_remove_from_library">Hapus dari Koleksi</string>
+    <string name="menu_subscribe">Ikuti</string>
+    <string name="menu_subscribed">Diikuti</string>
+    <string name="menu_pin_playlist">Sematkan Playlist</string>
+    <string name="menu_unpin_playlist">Lepas Sematan</string>
+    <string name="menu_rename_playlist">Ubah Nama Playlist</string>
+    <string name="menu_delete_playlist">Hapus Playlist</string>
+    <string name="menu_delete_playlist_confirm">Hapus \"%1$s\"? Tindakan ini tidak dapat dibatalkan.</string>
     <string name="menu_go_to_artist">Lihat Artis</string>
     <string name="menu_go_to_album">Lihat Album</string>
     <string name="menu_share">Bagikan</string>
     <string name="menu_stats_for_nerds">Statistik Teknis</string>
     <string name="toast_added_play_next">Akan diputar berikutnya</string>
     <string name="toast_added_queue">Ditambahkan ke antrean</string>
+    <string name="toast_radio_started">Memulai radio…</string>
     <string name="toast_download_started">Unduhan dimulai</string>
     <string name="toast_added_playlist">Ditambahkan ke %1$s</string>
+    <string name="toast_saved_library">Disimpan ke Koleksi</string>
+    <string name="toast_removed_library">Dihapus dari Koleksi</string>
+    <string name="toast_playlist_deleted">Playlist dihapus</string>
 
     <!-- Player & Now Playing -->
     <string name="player_now_playing">Sedang Diputar</string>
@@ -271,11 +288,14 @@
     <string name="settings_lyrics_preview_desc">Tampilkan baris lirik aktif di atas scrubber</string>
     <string name="settings_cache_limit">Batas Cache Audio</string>
     <string name="settings_section_data">Data Kamu</string>
-    <string name="settings_export_backup">Ekspor Cadangan Pengaturan</string>
-    <string name="settings_export_backup_desc">Simpan preferensi ke file JSON lokal</string>
-    <string name="settings_import_backup">Impor Cadangan Pengaturan</string>
-    <string name="settings_import_backup_desc">Pulihkan preferensi dari file JSON</string>
+    <string name="settings_sync_ytm_history">Sinkronkan Riwayat ke YouTube Music</string>
+    <string name="settings_sync_ytm_history_desc">Laporkan lagu yang diputar agar rekomendasi YouTube Music tetap sesuai selera</string>
+    <string name="settings_export_backup">Ekspor Cadangan Lengkap</string>
+    <string name="settings_export_backup_desc">Simpan pengaturan, playlist, lagu disukai, dan riwayat ke JSON</string>
+    <string name="settings_import_backup">Impor Cadangan</string>
+    <string name="settings_import_backup_desc">Pulihkan pengaturan dan data koleksi dari file JSON</string>
     <string name="settings_backup_saved">Cadangan berhasil diekspor</string>
     <string name="settings_backup_restored">Cadangan berhasil dipulihkan</string>
     <string name="settings_backup_failed">Gagal memproses file cadangan</string>
+    <string name="library_ytm_playlist_badge">YouTube Music</string>
 </resources>

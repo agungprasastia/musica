@@ -108,6 +108,7 @@ object InnertubeParsers {
 
         val tracks = mutableListOf<Song>()
         val sections = mutableListOf<HomeShelf>()
+        var shelfContinuation: String? = null
 
         secondarySectionList?.arr("contents")?.forEach { entry ->
             val obj = entry.asObj() ?: return@forEach
@@ -116,6 +117,10 @@ object InnertubeParsers {
                 ?: obj.obj("musicCarouselShelfRenderer")
                 ?: obj.obj("gridRenderer")
                 ?: return@forEach
+
+            if (shelfContinuation == null) {
+                shelfContinuation = extractContinuation(shelfObj)
+            }
 
             val shelfTitle = extractShelfTitle(shelfObj)
             val parsedItems = parseRendererItems(
@@ -139,19 +144,27 @@ object InnertubeParsers {
                     if (tracks.isEmpty() && parsedItems.all { it is ShelfItem.Track }) {
                         tracks += parsedItems.filterIsInstance<ShelfItem.Track>().map { it.song }
                     }
+                    val moreEndpoint = shelfObj.obj("bottomEndpoint")?.obj("browseEndpoint")
+                        ?: shelfObj.obj("header")?.obj("musicCarouselShelfBasicHeaderRenderer")
+                            ?.obj("moreContentButton")?.obj("buttonRenderer")
+                            ?.obj("navigationEndpoint")?.obj("browseEndpoint")
                     sections += HomeShelf(
                         title = shelfTitle.ifBlank { title },
                         items = parsedItems,
-                        browseId = shelfObj.obj("bottomEndpoint")?.obj("browseEndpoint")?.str("browseId")
-                            ?: shelfObj.obj("header")?.obj("musicCarouselShelfBasicHeaderRenderer")
-                                ?.obj("moreContentButton")?.obj("buttonRenderer")
-                                ?.obj("navigationEndpoint")?.obj("browseEndpoint")?.str("browseId"),
+                        browseId = moreEndpoint?.str("browseId"),
+                        params = moreEndpoint?.str("params"),
                     )
                 }
             }
         }
 
-        val continuation = secondarySectionList?.let(::extractContinuation)
+        val continuation = shelfContinuation ?: secondarySectionList?.let(::extractContinuation)
+        val resolvedArtist = straplineArtist
+            ?: if (type == BrowseType.ALBUM) {
+                tracks.firstOrNull()?.artists?.firstOrNull { !it.browseId.isNullOrBlank() }
+            } else {
+                null
+            }
         return DetailPage(
             browseId = browseId,
             type = type,
@@ -159,9 +172,91 @@ object InnertubeParsers {
             subtitle = subtitle,
             description = description,
             thumbnailUrl = thumbnailUrl,
+            artist = resolvedArtist,
             tracks = tracks,
             sections = sections,
             continuation = continuation,
+        )
+    }
+
+    /**
+     * Parses playlist/detail continuation pages (>100 tracks), supporting both
+     * `musicPlaylistShelfContinuation`, `musicShelfContinuation`, and `sectionListContinuation`.
+     */
+    fun parseDetailContinuation(browseId: String, root: JsonObject): Pair<List<Song>, String?> {
+        val contContents = root.obj("continuationContents")
+        val shelf = contContents?.obj("musicPlaylistShelfContinuation")
+            ?: contContents?.obj("musicShelfContinuation")
+        if (shelf != null) {
+            val songs = parseRendererItems(shelf.arr("contents"))
+                .filterIsInstance<ShelfItem.Track>()
+                .map { it.song }
+            return songs to extractContinuation(shelf)
+        }
+
+        val sectionCont = contContents?.obj("sectionListContinuation")
+        if (sectionCont != null) {
+            val songs = mutableListOf<Song>()
+            var nextToken = extractContinuation(sectionCont)
+            sectionCont.arr("contents")?.forEach { entry ->
+                val obj = entry.asObj() ?: return@forEach
+                val inner = obj.obj("musicPlaylistShelfRenderer")
+                    ?: obj.obj("musicShelfRenderer")
+                    ?: return@forEach
+                songs += parseRendererItems(inner.arr("contents"))
+                    .filterIsInstance<ShelfItem.Track>()
+                    .map { it.song }
+                if (nextToken == null) nextToken = extractContinuation(inner)
+            }
+            return songs to nextToken
+        }
+
+        // Also handle onResponseReceivedActions appendContinuationItemsAction format
+        val actions = root.arr("onResponseReceivedActions")
+        if (actions != null) {
+            val songs = mutableListOf<Song>()
+            var nextToken: String? = null
+            actions.forEach { action ->
+                val items = action.asObj()
+                    ?.obj("appendContinuationItemsAction")
+                    ?.arr("continuationItems")
+                    ?: return@forEach
+                songs += parseRendererItems(items)
+                    .filterIsInstance<ShelfItem.Track>()
+                    .map { it.song }
+                items.forEach { item ->
+                    val token = item.asObj()
+                        ?.obj("continuationItemRenderer")
+                        ?.obj("continuationEndpoint")
+                        ?.obj("continuationCommand")
+                        ?.str("token")
+                    if (!token.isNullOrBlank()) nextToken = token
+                }
+            }
+            return songs to nextToken
+        }
+
+        val fallback = parseDetailPage(browseId, root)
+        return fallback.tracks to fallback.continuation
+    }
+
+    fun parsePlaybackTracking(root: JsonObject): PlaybackTrackingUrls? {
+        val tracking = root.obj("playbackTracking") ?: return null
+        val playbackUrl = tracking.obj("videostatsPlaybackUrl")?.str("baseUrl")
+            ?.takeIf { it.isNotBlank() }
+            ?: return null
+        val atrObj = tracking.obj("atrUrl")
+        val atrUrl = atrObj?.str("baseUrl")?.takeIf { it.isNotBlank() }
+        val atrDelaySec = atrObj?.str("elapsedMediaTimeSeconds")?.toLongOrNull()
+            ?.coerceIn(2L, 30L)
+            ?: 5L
+        val watchtimeUrl = tracking.obj("videostatsWatchtimeUrl")?.str("baseUrl")
+            ?.takeIf { it.isNotBlank() }
+        return PlaybackTrackingUrls(
+            playbackUrl = playbackUrl,
+            atrUrl = atrUrl,
+            watchtimeUrl = watchtimeUrl,
+            atrAfterSeconds = atrDelaySec,
         )
     }
 

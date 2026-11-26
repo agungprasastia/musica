@@ -53,7 +53,10 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.QueuePlayNext
+import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.ThumbDown
+import androidx.compose.material.icons.rounded.ThumbDownOffAlt
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -597,6 +600,7 @@ fun ShelfSection(
     downloadedIds: Set<String>,
     onItemClick: (ShelfItem) -> Unit,
     onSongMore: (Song) -> Unit,
+    onBrowseLongClick: ((ShelfItem) -> Unit)? = null,
     onPlayNext: ((Song) -> Unit)? = null,
     onAddToQueue: ((Song) -> Unit)? = null,
     onSeeAllClick: (() -> Unit)? = null,
@@ -726,7 +730,12 @@ fun ShelfSection(
                             item = item,
                             isActive = activeVideoId != null && (item as? ShelfItem.Track)?.song?.videoId == activeVideoId,
                             onClick = { onItemClick(item) },
-                            onLongClick = (item as? ShelfItem.Track)?.let { t -> { onSongMore(t.song) } },
+                            onLongClick = when (item) {
+                                is ShelfItem.Track -> {
+                                    { onSongMore(item.song) }
+                                }
+                                else -> onBrowseLongClick?.let { handler -> { handler(item) } }
+                            },
                         )
                     }
                 }
@@ -833,12 +842,15 @@ fun IosSwitch(
 fun SongActionsSheet(
     song: Song,
     isLiked: Boolean,
+    isDisliked: Boolean = false,
     isDownloaded: Boolean,
     hazeState: HazeState? = null,
     onDismiss: () -> Unit,
     onPlayNext: () -> Unit,
     onAddToQueue: () -> Unit,
+    onStartRadio: (() -> Unit)? = null,
     onToggleLike: () -> Unit,
+    onToggleDislike: (() -> Unit)? = null,
     onAddToPlaylist: () -> Unit,
     onToggleDownload: () -> Unit,
     onGoToArtist: (() -> Unit)?,
@@ -925,8 +937,22 @@ fun SongActionsSheet(
             SheetActionRow(Icons.AutoMirrored.Rounded.QueueMusic, stringResource(R.string.menu_add_to_queue), tint = fg) {
                 onAddToQueue(); onDismiss()
             }
+            if (onStartRadio != null) {
+                SheetActionRow(Icons.Rounded.Radio, stringResource(R.string.menu_start_radio), tint = fg) {
+                    onDismiss(); onStartRadio()
+                }
+            }
             SheetActionRow(Icons.AutoMirrored.Rounded.PlaylistAdd, stringResource(R.string.menu_add_playlist), tint = fg) {
                 onDismiss(); onAddToPlaylist()
+            }
+            if (onToggleDislike != null) {
+                SheetActionRow(
+                    icon = if (isDisliked) Icons.Rounded.ThumbDown else Icons.Rounded.ThumbDownOffAlt,
+                    label = stringResource(if (isDisliked) R.string.menu_undislike else R.string.menu_dislike),
+                    tint = if (isDisliked) MusicaAccentRed else fg,
+                ) {
+                    onToggleDislike(); onDismiss()
+                }
             }
             if (onGoToArtist != null) {
                 SheetActionRow(Icons.Rounded.Person, stringResource(R.string.menu_go_to_artist), tint = fg) {

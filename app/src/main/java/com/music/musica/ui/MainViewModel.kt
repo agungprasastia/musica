@@ -9,6 +9,7 @@ import com.music.musica.MusicaApplication
 import com.music.musica.core.auth.GoogleSession
 import com.music.musica.core.model.AppLanguage
 import com.music.musica.core.model.AudioQuality
+import com.music.musica.core.model.BrowseType
 import com.music.musica.core.model.DetailPage
 import com.music.musica.core.model.ExploreFeed
 import com.music.musica.core.model.HomeShelf
@@ -24,9 +25,11 @@ import com.music.musica.core.model.UiState
 import com.music.musica.core.model.UserPlaylist
 import com.music.musica.core.network.HttpClients
 import com.music.musica.core.settings.UserSettings
+import com.music.musica.data.backup.FullBackupSerializer
 import com.music.musica.data.lyrics.LyricsQuery
 import com.music.musica.data.lyrics.LyricsResult
 import com.music.musica.data.repository.ReplaySummary
+import com.music.musica.ui.components.BrowseActionTarget
 import com.music.musica.ui.navigation.AppNavigator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -68,8 +71,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val likedSongs = container.libraryRepository.likedSongs.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val likedIds = container.libraryRepository.likedIds.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+    val dislikedIds = container.libraryRepository.dislikedIds.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
     val localPlaylists = container.libraryRepository.localPlaylists.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val subscribedArtistIds = container.libraryRepository.subscribedArtistIds.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+    val savedCollectionIds = container.libraryRepository.savedCollectionIds.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
     val recentHistory = container.libraryRepository.recentHistory.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     val recentlyPlayedSongs = container.libraryRepository.recentlyPlayedSongs.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val recentSearches = container.libraryRepository.recentSearchQueries.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -112,11 +117,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _searchResults = MutableStateFlow<UiState<List<ShelfItem>>?>(null)
     val searchResults: StateFlow<UiState<List<ShelfItem>>?> = _searchResults.asStateFlow()
+    private val _searchHasMore = MutableStateFlow(false)
+    val searchHasMore: StateFlow<Boolean> = _searchHasMore.asStateFlow()
+    private val _searchLoadingMore = MutableStateFlow(false)
+    val searchLoadingMore: StateFlow<Boolean> = _searchLoadingMore.asStateFlow()
+    private var searchContinuation: String? = null
     private var searchJob: Job? = null
 
     // ---- Detail Stack + Surviving AppNavigator ----
     private val _detailStack = MutableStateFlow<List<DetailStackEntry>>(emptyList())
     val detailStack: StateFlow<List<DetailStackEntry>> = _detailStack.asStateFlow()
+    private val _detailLoadingMore = MutableStateFlow(false)
+    val detailLoadingMore: StateFlow<Boolean> = _detailLoadingMore.asStateFlow()
 
     val navigator: AppNavigator = AppNavigator(
         detailDepth = { _detailStack.value.size },
@@ -324,6 +336,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // Editing the query returns cleanly to live suggestions instead of showing stale results
         if (_searchResults.value != null) {
             searchJob?.cancel()
+            searchContinuation = null
+            _searchHasMore.value = false
+            _searchLoadingMore.value = false
             _searchResults.value = null
         }
     }
@@ -334,12 +349,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _searchQuery.value = clean
         _searchFilter.value = filter
         _searchResults.value = UiState.Loading
+        searchContinuation = null
+        _searchHasMore.value = false
+        _searchLoadingMore.value = false
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             container.libraryRepository.recordSearchQuery(clean)
             container.ytMusicRepository.search(clean, filter)
-                .onSuccess { page -> _searchResults.value = UiState.Success(page.items) }
+                .onSuccess { page ->
+                    searchContinuation = page.continuation
+                    _searchHasMore.value = !page.continuation.isNullOrBlank()
+                    _searchResults.value = UiState.Success(page.items)
+                }
                 .onFailure { err -> _searchResults.value = UiState.Error(err.localizedMessage ?: "", err) }
+        }
+    }
+
+    fun loadMoreSearch() {
+        val token = searchContinuation?.takeIf { it.isNotBlank() } ?: return
+        if (_searchLoadingMore.value) return
+        val currentQuery = _searchQuery.value
+        val currentFilter = _searchFilter.value
+        _searchLoadingMore.value = true
+        viewModelScope.launch {
+            container.ytMusicRepository.search(currentQuery, currentFilter, continuation = token)
+                .onSuccess { page ->
+                    if (_searchQuery.value != currentQuery || _searchFilter.value != currentFilter) return@onSuccess
+                    searchContinuation = page.continuation
+                    _searchHasMore.value = !page.continuation.isNullOrBlank()
+                    val existing = (_searchResults.value as? UiState.Success)?.data.orEmpty()
+                    val seen = existing.map { it.id + it::class.simpleName }.toHashSet()
+                    val fresh = page.items.filter { seen.add(it.id + it::class.simpleName) }
+                    if (fresh.isNotEmpty()) {
+                        _searchResults.value = UiState.Success(existing + fresh)
+                    }
+                }
+            _searchLoadingMore.value = false
         }
     }
 
@@ -380,6 +425,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun retryTopDetail() {
         val top = _detailStack.value.lastOrNull() ?: return
         fetchDetailForTop(top.browseId, top.params, top.isLocalPlaylist, forceRefresh = true)
+    }
+
+    fun loadMoreDetail() {
+        if (_detailLoadingMore.value) return
+        val top = _detailStack.value.lastOrNull() ?: return
+        if (top.isLocalPlaylist) return
+        val currentPage = (top.state as? UiState.Success)?.data ?: return
+        val token = currentPage.continuation?.takeIf { it.isNotBlank() } ?: return
+
+        _detailLoadingMore.value = true
+        viewModelScope.launch {
+            container.ytMusicRepository.loadDetailContinuation(top.browseId, token)
+                .onSuccess { (moreTracks, nextToken) ->
+                    _detailStack.update { stack ->
+                        stack.map { entry ->
+                            if (entry.browseId == top.browseId && entry.params == top.params) {
+                                val latest = (entry.state as? UiState.Success)?.data ?: return@map entry
+                                val seenIds = latest.tracks.map { it.videoId }.toHashSet()
+                                val fresh = moreTracks.filter { seenIds.add(it.videoId) }
+                                entry.copy(
+                                    state = UiState.Success(
+                                        latest.copy(
+                                            tracks = latest.tracks + fresh,
+                                            continuation = nextToken,
+                                        ),
+                                    ),
+                                )
+                            } else entry
+                        }
+                    }
+                }
+            _detailLoadingMore.value = false
+        }
     }
 
     fun popDetail(): Boolean {
@@ -467,6 +545,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             container.ytMusicRepository.fetchAccountProfile()?.let { profile ->
                 container.authStore.updateProfile(profile)
             }
+            container.libraryRepository.syncFromYouTubeMusic()
             container.ytMusicRepository.loadRemoteLibrary().onSuccess { shelves ->
                 _remoteLibrary.value = shelves
             }
@@ -500,8 +579,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { container.libraryRepository.toggleLike(song) }
     }
 
+    fun toggleDislike(song: Song) {
+        viewModelScope.launch { container.libraryRepository.toggleDislike(song) }
+    }
+
+    fun startRadio(song: Song) {
+        viewModelScope.launch {
+            val related = container.ytMusicRepository.upNext(song.videoId, "RDAMVM${song.videoId}")
+                .filterNot { it.videoId == song.videoId }
+            val queue = listOf(song) + related
+            container.playerController.playQueue(queue, startIndex = 0, shuffled = false)
+        }
+    }
+
     fun createPlaylist(title: String) {
         viewModelScope.launch { container.libraryRepository.createPlaylist(title) }
+    }
+
+    fun renamePlaylist(playlistId: String, newTitle: String) {
+        viewModelScope.launch { container.libraryRepository.renamePlaylist(playlistId, newTitle) }
+    }
+
+    fun deletePlaylist(playlistId: String) {
+        viewModelScope.launch { container.libraryRepository.deletePlaylist(playlistId) }
+    }
+
+    fun removeSongFromPlaylist(playlistId: String, song: Song) {
+        viewModelScope.launch { container.libraryRepository.removeSongFromPlaylist(playlistId, song) }
     }
 
     fun togglePlaylistPin(playlistId: String) {
@@ -510,6 +614,60 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleArtistSubscribed(browseId: String, name: String, thumbnailUrl: String?) {
         viewModelScope.launch { container.libraryRepository.toggleArtistSubscribed(browseId, name, thumbnailUrl) }
+    }
+
+    fun toggleSaveCollection(
+        browseId: String,
+        type: BrowseType,
+        title: String,
+        subtitle: String?,
+        thumbnailUrl: String?,
+    ) {
+        viewModelScope.launch {
+            container.libraryRepository.toggleSaveCollection(browseId, type, title, subtitle, thumbnailUrl)
+        }
+    }
+
+    private suspend fun resolveTracksForTarget(target: BrowseActionTarget): List<Song> {
+        val localPlaylist = target.userPlaylist
+        if (localPlaylist != null && (!localPlaylist.isRemoteYtm || localPlaylist.playlistId.startsWith("local_"))) {
+            return container.libraryRepository.loadLocalPlaylistDetail(localPlaylist.playlistId)?.tracks.orEmpty()
+        }
+        val browseId = if (localPlaylist != null && !localPlaylist.playlistId.startsWith("VL")) {
+            "VL${localPlaylist.playlistId}"
+        } else {
+            target.browseId
+        }
+        return container.ytMusicRepository.loadDetail(browseId, target.params).getOrNull()?.tracks.orEmpty()
+    }
+
+    fun playBrowseTarget(target: BrowseActionTarget, shuffled: Boolean) {
+        viewModelScope.launch {
+            val tracks = resolveTracksForTarget(target)
+            if (tracks.isNotEmpty()) {
+                container.playerController.playQueue(tracks, startIndex = 0, shuffled = shuffled)
+            }
+        }
+    }
+
+    fun queueBrowseTarget(target: BrowseActionTarget, playNext: Boolean) {
+        viewModelScope.launch {
+            val tracks = resolveTracksForTarget(target)
+            if (playNext) {
+                tracks.asReversed().forEach { container.playerController.playNext(it) }
+            } else {
+                tracks.forEach { container.playerController.addToQueue(it) }
+            }
+        }
+    }
+
+    fun downloadBrowseTarget(target: BrowseActionTarget) {
+        viewModelScope.launch {
+            val tracks = resolveTracksForTarget(target)
+            if (tracks.isNotEmpty()) {
+                container.downloadRepository.downloadSongs(tracks, target.browseId, target.title)
+            }
+        }
     }
 
     fun addSongToPlaylist(playlistId: String, song: Song) {
@@ -618,20 +776,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _libraryRefreshing.value = true
             if (container.authStore.isSignedIn) {
+                container.libraryRepository.syncFromYouTubeMusic()
                 container.ytMusicRepository.loadRemoteLibrary().onSuccess { _remoteLibrary.value = it }
             }
             _libraryRefreshing.value = false
         }
     }
 
-    fun exportSettingsJson(): String =
-        HttpClients.json.encodeToString(settings.value)
+    fun setSyncPlaybackHistoryToYtm(enabled: Boolean) = viewModelScope.launch {
+        container.settingsStore.setSyncPlaybackHistoryToYtm(enabled)
+    }
 
-    suspend fun importSettingsJson(raw: String): Boolean = runCatching {
-        val parsed = HttpClients.json.decodeFromString<UserSettings>(raw)
-        container.settingsStore.restoreFrom(parsed)
-        true
-    }.getOrDefault(false)
+    suspend fun exportFullBackupJson(): String =
+        FullBackupSerializer.exportFromDatabase(container.database, settings.value)
+
+    suspend fun importBackupJson(raw: String): Boolean =
+        FullBackupSerializer.importIntoDatabase(container.database, container.settingsStore, raw)
     fun setCrossfadeSeconds(seconds: Int) = viewModelScope.launch { container.settingsStore.setCrossfadeSeconds(seconds) }
     fun setSkipSilence(enabled: Boolean) = viewModelScope.launch {
         container.settingsStore.setSkipSilence(enabled)

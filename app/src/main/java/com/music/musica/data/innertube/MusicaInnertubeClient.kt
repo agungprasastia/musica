@@ -92,6 +92,21 @@ class MusicaInnertubeClient(
         return InnertubeParsers.parseDetailPage(browseId, root)
     }
 
+    suspend fun browseDetailContinuation(browseId: String, continuation: String): Pair<List<Song>, String?> {
+        val root = postMusic("browse", continuation = continuation) {}
+            ?: return emptyList<Song>() to null
+        return InnertubeParsers.parseDetailContinuation(browseId, root)
+    }
+
+    suspend fun browseLikedSongs(continuation: String? = null): Pair<List<Song>, String?> {
+        return if (continuation == null) {
+            val page = browseDetail("VLLM")
+            page.tracks to page.continuation
+        } else {
+            browseDetailContinuation("VLLM", continuation)
+        }
+    }
+
     suspend fun search(
         query: String,
         filter: SearchFilter = SearchFilter.ALL,
@@ -191,6 +206,130 @@ class MusicaInnertubeClient(
                 )
             }
         } != null
+    }
+
+    suspend fun deletePlaylist(playlistId: String): Boolean {
+        if (cookieProvider().isNullOrBlank()) return false
+        val cleanId = playlistId.removePrefix("VL")
+        return postMusic("playlist/delete") {
+            put("playlistId", cleanId)
+        } != null
+    }
+
+    suspend fun renamePlaylist(playlistId: String, title: String, description: String = ""): Boolean {
+        if (cookieProvider().isNullOrBlank()) return false
+        val cleanId = playlistId.removePrefix("VL")
+        return postMusic("browse/edit_playlist") {
+            put("playlistId", cleanId)
+            putJsonArray("actions") {
+                add(
+                    buildJsonObject {
+                        put("action", "ACTION_SET_PLAYLIST_NAME")
+                        put("playlistName", title.trim())
+                    },
+                )
+                if (description.isNotBlank()) {
+                    add(
+                        buildJsonObject {
+                            put("action", "ACTION_SET_PLAYLIST_DESCRIPTION")
+                            put("playlistDescription", description.trim())
+                        },
+                    )
+                }
+            }
+        } != null
+    }
+
+    suspend fun removeSongFromPlaylist(playlistId: String, videoId: String, setVideoId: String?): Boolean {
+        if (cookieProvider().isNullOrBlank()) return false
+        val cleanId = playlistId.removePrefix("VL")
+        return postMusic("browse/edit_playlist") {
+            put("playlistId", cleanId)
+            putJsonArray("actions") {
+                add(
+                    buildJsonObject {
+                        put("action", "ACTION_REMOVE_VIDEO")
+                        put("removedVideoId", videoId)
+                        if (!setVideoId.isNullOrBlank()) put("setVideoId", setVideoId)
+                    },
+                )
+            }
+        } != null
+    }
+
+    suspend fun movePlaylistItem(
+        playlistId: String,
+        setVideoId: String,
+        movedBeforeSetVideoId: String?,
+    ): Boolean {
+        if (cookieProvider().isNullOrBlank()) return false
+        val cleanId = playlistId.removePrefix("VL")
+        return postMusic("browse/edit_playlist") {
+            put("playlistId", cleanId)
+            putJsonArray("actions") {
+                add(
+                    buildJsonObject {
+                        put("action", "ACTION_MOVE_VIDEO_BEFORE")
+                        put("setVideoId", setVideoId)
+                        if (!movedBeforeSetVideoId.isNullOrBlank()) {
+                            put("movedSetVideoIdSuccessor", movedBeforeSetVideoId)
+                        }
+                    },
+                )
+            }
+        } != null
+    }
+
+    suspend fun setSubscribed(channelId: String, subscribe: Boolean): Boolean {
+        if (cookieProvider().isNullOrBlank()) return false
+        val endpoint = if (subscribe) "subscription/subscribe" else "subscription/unsubscribe"
+        return postMusic(endpoint) {
+            putJsonArray("channelIds") {
+                add(JsonPrimitive(channelId))
+            }
+        } != null
+    }
+
+    suspend fun ratePlaylist(playlistId: String, like: Boolean): Boolean {
+        if (cookieProvider().isNullOrBlank()) return false
+        val cleanId = playlistId.removePrefix("VL")
+        val endpoint = if (like) "like/like" else "like/removelike"
+        return postMusic(endpoint) {
+            putJsonObject("target") {
+                put("playlistId", cleanId)
+            }
+        } != null
+    }
+
+    suspend fun fetchPlaybackTracking(videoId: String): PlaybackTrackingUrls? {
+        if (cookieProvider().isNullOrBlank()) return null
+        val root = postMusic("player") {
+            put("videoId", videoId)
+            put("contentCheckOk", true)
+            put("racyCheckOk", true)
+        } ?: return null
+        return InnertubeParsers.parsePlaybackTracking(root)
+    }
+
+    suspend fun pingTrackingUrl(
+        baseUrl: String,
+        queryParams: Map<String, String>,
+    ): Int {
+        val cookie = cookieProvider()?.takeIf { it.isNotBlank() } ?: return 0
+        val scope = ensureSessionScope(cookie)
+        val response = http.get(baseUrl) {
+            queryParams.forEach { (k, v) -> parameter(k, v) }
+            header("User-Agent", WEB_USER_AGENT)
+            header("Origin", MUSIC_ORIGIN)
+            header("Referer", "$MUSIC_ORIGIN/")
+            header("Cookie", cookie)
+            header("X-Goog-AuthUser", scope?.authUser ?: "0")
+            scope?.pageId?.let { header("X-Goog-PageId", it) }
+            SapisidHashSigner.authorizationHeader(cookie, MUSIC_ORIGIN)?.let {
+                header("Authorization", it)
+            }
+        }
+        return response.status.value
     }
 
     private data class SessionScope(

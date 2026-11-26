@@ -1,5 +1,6 @@
 package com.music.musica.ui
 
+import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -43,12 +44,16 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.musica.R
 import com.music.musica.core.auth.GoogleSession
 import com.music.musica.core.model.AppLanguage
+import com.music.musica.core.model.BrowseType
+import com.music.musica.core.model.ShelfItem
 import com.music.musica.core.model.Song
 import com.music.musica.core.model.UiState
 import com.music.musica.core.settings.UserSettings
 import com.music.musica.data.lyrics.SyncedLyricsParser
 import com.music.musica.playback.PlayerUiState
 import com.music.musica.ui.components.BottomFadeScrim
+import com.music.musica.ui.components.BrowseActionTarget
+import com.music.musica.ui.components.BrowseActionsSheet
 import com.music.musica.ui.components.FloatingBarsTapGuard
 import com.music.musica.ui.components.FloatingGlassNavBar
 import com.music.musica.ui.components.LocalLiquidGlassEnabled
@@ -99,6 +104,9 @@ internal fun MusicaAppRoot(
     val playerState by vm.playerState.collectAsStateWithLifecycle()
     val detailStack by vm.detailStack.collectAsStateWithLifecycle()
     val likedIds by vm.likedIds.collectAsStateWithLifecycle()
+    val dislikedIds by vm.dislikedIds.collectAsStateWithLifecycle()
+    val subscribedArtistIds by vm.subscribedArtistIds.collectAsStateWithLifecycle()
+    val savedCollectionIds by vm.savedCollectionIds.collectAsStateWithLifecycle()
     val downloadedIds by vm.downloadedIds.collectAsStateWithLifecycle()
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -106,6 +114,7 @@ internal fun MusicaAppRoot(
     var onboardingLoginOpen by remember { mutableStateOf(false) }
 
     var actionMenuSong by remember { mutableStateOf<Song?>(null) }
+    var browseActionTarget by remember { mutableStateOf<BrowseActionTarget?>(null) }
     var playlistPickerSong by remember { mutableStateOf<Song?>(null) }
     var showSpeedSheet by remember { mutableStateOf(false) }
     var showSleepSheet by remember { mutableStateOf(false) }
@@ -137,8 +146,9 @@ internal fun MusicaAppRoot(
         scope.launch {
             val ok = withContext(Dispatchers.IO) {
                 runCatching {
+                    val json = vm.exportFullBackupJson()
                     context.contentResolver.openOutputStream(uri)?.use { out ->
-                        out.write(vm.exportSettingsJson().toByteArray(Charsets.UTF_8))
+                        out.write(json.toByteArray(Charsets.UTF_8))
                     }
                     true
                 }.getOrDefault(false)
@@ -157,7 +167,7 @@ internal fun MusicaAppRoot(
                 runCatching {
                     val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
                         ?: return@runCatching false
-                    vm.importSettingsJson(text)
+                    vm.importBackupJson(text)
                 }.getOrDefault(false)
             }
             val msgRes = if (ok) R.string.settings_backup_restored else R.string.settings_backup_failed
@@ -178,6 +188,12 @@ internal fun MusicaAppRoot(
         }
     }
     val onOpenSongMore = remember { { song: Song -> actionMenuSong = song } }
+    val onOpenBrowseMore: (ShelfItem) -> Unit = remember {
+        { item: ShelfItem ->
+            BrowseActionTarget.fromShelfItem(item)?.let { browseActionTarget = it }
+            Unit
+        }
+    }
 
     LaunchedEffect(playerState.errorMessage) {
         val msg = playerState.errorMessage
@@ -314,12 +330,14 @@ internal fun MusicaAppRoot(
                 )
 
                 topDetail != null -> {
-                    val subscribedArtistIds by vm.subscribedArtistIds.collectAsStateWithLifecycle()
+                    val detailLoadingMore by vm.detailLoadingMore.collectAsStateWithLifecycle()
                     DetailScreen(
                         state = topDetail.state,
                         activeVideoId = activeVideoId,
                         downloadedIds = downloadedIds,
                         subscribedArtistIds = subscribedArtistIds,
+                        savedCollectionIds = savedCollectionIds,
+                        isLoadingMore = detailLoadingMore,
                         hazeState = hazeState,
                         frostedGlassEnabled = settings.frostedGlassEnabled,
                         fullBleedCoverArt = settings.fullBleedCoverArt,
@@ -327,13 +345,23 @@ internal fun MusicaAppRoot(
                         bottomPadding = chromeBottomPadding,
                         onBack = { navigator.pop() },
                         onRetry = vm::retryTopDetail,
+                        onLoadMoreTracks = vm::loadMoreDetail,
                         onPlayTracks = vm::playTracks,
                         onDownloadAll = { songs, collectionId, collectionTitle ->
                             vm.downloadAll(songs, collectionId, collectionTitle)
                             Toast.makeText(context, resources.getString(R.string.toast_download_started), Toast.LENGTH_SHORT).show()
                         },
                         onToggleSubscribeArtist = vm::toggleArtistSubscribed,
+                        onToggleSaveCollection = { id, type, title, subtitle, thumb ->
+                            val wasSaved = id in savedCollectionIds
+                            vm.toggleSaveCollection(id, type, title, subtitle, thumb)
+                            val msg = if (wasSaved) R.string.toast_removed_library else R.string.toast_saved_library
+                            Toast.makeText(context, resources.getString(msg), Toast.LENGTH_SHORT).show()
+                        },
+                        onOpenArtist = { artistId -> vm.openDetail(artistId) },
+                        onOpenSeeAll = { browseId, params -> vm.openDetail(browseId, params) },
                         onItemClick = { item -> vm.handleShelfItemClick(item) },
+                        onBrowseLongClick = onOpenBrowseMore,
                         onSongMore = onOpenSongMore,
                         onPlayNext = onPlayNextWithToast,
                         onAddToQueue = onAddToQueueWithToast,
@@ -350,6 +378,7 @@ internal fun MusicaAppRoot(
                         settings = settings,
                         bottomPadding = chromeBottomPadding,
                         listState = homeListState,
+                        onBrowseLongClick = onOpenBrowseMore,
                         onSongMore = onOpenSongMore,
                         onPlayNext = onPlayNextWithToast,
                         onAddToQueue = onAddToQueueWithToast,
@@ -376,6 +405,7 @@ internal fun MusicaAppRoot(
                         settings = settings,
                         bottomPadding = chromeBottomPadding,
                         listState = mixesListState,
+                        onBrowseLongClick = onOpenBrowseMore,
                         onSongMore = onOpenSongMore,
                         onPlayNext = onPlayNextWithToast,
                         onAddToQueue = onAddToQueueWithToast,
@@ -395,6 +425,10 @@ internal fun MusicaAppRoot(
                         onOpenDownloads = { navigator.push(AppRoute.Downloads) },
                         onOpenHistory = { navigator.push(AppRoute.History) },
                         onOpenLogin = { navigator.push(AppRoute.YtLogin) },
+                        onBrowseLongClick = onOpenBrowseMore,
+                        onPlaylistLongClick = { pl ->
+                            browseActionTarget = BrowseActionTarget.fromUserPlaylist(pl)
+                        },
                         onSongMore = onOpenSongMore,
                         onPlayNext = onPlayNextWithToast,
                         onAddToQueue = onAddToQueueWithToast,
@@ -408,6 +442,7 @@ internal fun MusicaAppRoot(
                         settings = settings,
                         bottomPadding = chromeBottomPadding,
                         listState = searchListState,
+                        onBrowseLongClick = onOpenBrowseMore,
                         onSongMore = onOpenSongMore,
                         onPlayNext = onPlayNextWithToast,
                         onAddToQueue = onAddToQueueWithToast,
@@ -417,6 +452,7 @@ internal fun MusicaAppRoot(
         }
 
         val hasModalOverlay = actionMenuSong != null ||
+            browseActionTarget != null ||
             playlistPickerSong != null ||
             showSpeedSheet ||
             showSleepSheet ||
@@ -512,12 +548,18 @@ internal fun MusicaAppRoot(
             SongActionsSheet(
                 song = song,
                 isLiked = song.videoId in likedIds,
+                isDisliked = song.videoId in dislikedIds,
                 isDownloaded = song.videoId in downloadedIds,
                 hazeState = activeOverlayHazeState,
                 onDismiss = { actionMenuSong = null },
                 onPlayNext = { onPlayNextWithToast(song) },
                 onAddToQueue = { onAddToQueueWithToast(song) },
+                onStartRadio = {
+                    vm.startRadio(song)
+                    Toast.makeText(context, resources.getString(R.string.toast_radio_started), Toast.LENGTH_SHORT).show()
+                },
                 onToggleLike = { vm.toggleLike(song) },
+                onToggleDislike = { vm.toggleDislike(song) },
                 onAddToPlaylist = { playlistPickerSong = song },
                 onToggleDownload = {
                     vm.toggleDownload(song)
@@ -539,6 +581,78 @@ internal fun MusicaAppRoot(
                 },
                 onShare = { onShareSong(song) },
                 onShowStats = { showStatsDialog = true },
+            )
+        }
+
+        browseActionTarget?.let { target ->
+            val isSavedOrSubscribed = when (target.type) {
+                BrowseType.ARTIST -> target.browseId in subscribedArtistIds
+                else -> target.browseId in savedCollectionIds
+            }
+            BrowseActionsSheet(
+                target = target,
+                isSavedOrSubscribed = isSavedOrSubscribed,
+                hazeState = activeOverlayHazeState,
+                onDismiss = { browseActionTarget = null },
+                onPlay = { vm.playBrowseTarget(target, shuffled = false) },
+                onShuffle = { vm.playBrowseTarget(target, shuffled = true) },
+                onPlayNext = {
+                    vm.queueBrowseTarget(target, playNext = true)
+                    Toast.makeText(context, resources.getString(R.string.toast_added_play_next), Toast.LENGTH_SHORT).show()
+                },
+                onAddToQueue = {
+                    vm.queueBrowseTarget(target, playNext = false)
+                    Toast.makeText(context, resources.getString(R.string.toast_added_queue), Toast.LENGTH_SHORT).show()
+                },
+                onToggleSaveOrSubscribe = {
+                    if (target.type == BrowseType.ARTIST) {
+                        vm.toggleArtistSubscribed(target.browseId, target.title, target.thumbnailUrl)
+                    } else {
+                        val wasSaved = target.browseId in savedCollectionIds
+                        vm.toggleSaveCollection(
+                            target.browseId,
+                            target.type,
+                            target.title,
+                            target.subtitle,
+                            target.thumbnailUrl,
+                        )
+                        val msg = if (wasSaved) R.string.toast_removed_library else R.string.toast_saved_library
+                        Toast.makeText(context, resources.getString(msg), Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onDownloadAll = if (target.type != BrowseType.ARTIST) {
+                    {
+                        vm.downloadBrowseTarget(target)
+                        Toast.makeText(context, resources.getString(R.string.toast_download_started), Toast.LENGTH_SHORT).show()
+                    }
+                } else null,
+                onShare = {
+                    val shareUrl = when {
+                        target.type == BrowseType.PLAYLIST ->
+                            "https://music.youtube.com/playlist?list=${target.browseId.removePrefix("VL")}"
+                        target.type == BrowseType.ARTIST ->
+                            "https://music.youtube.com/channel/${target.browseId}"
+                        else ->
+                            "https://music.youtube.com/browse/${target.browseId}"
+                    }
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, "${target.title}\n$shareUrl")
+                    }
+                    context.startActivity(Intent.createChooser(shareIntent, target.title))
+                },
+                onTogglePinPlaylist = target.userPlaylist?.let { pl ->
+                    { vm.togglePlaylistPin(pl.playlistId) }
+                },
+                onRenamePlaylist = target.userPlaylist?.let { pl ->
+                    { newName -> vm.renamePlaylist(pl.playlistId, newName) }
+                },
+                onDeletePlaylist = target.userPlaylist?.let { pl ->
+                    {
+                        vm.deletePlaylist(pl.playlistId)
+                        Toast.makeText(context, resources.getString(R.string.toast_playlist_deleted), Toast.LENGTH_SHORT).show()
+                    }
+                },
             )
         }
 
@@ -619,6 +733,7 @@ private fun HomeTabHost(
     settings: UserSettings,
     bottomPadding: Dp,
     listState: LazyListState,
+    onBrowseLongClick: (ShelfItem) -> Unit,
     onSongMore: (Song) -> Unit,
     onPlayNext: (Song) -> Unit,
     onAddToQueue: (Song) -> Unit,
@@ -646,6 +761,7 @@ private fun HomeTabHost(
         onRefresh = { vm.loadHome(isRefresh = true) },
         onLoadMore = vm::loadMoreHome,
         onItemClick = { vm.handleShelfItemClick(it) },
+        onBrowseLongClick = onBrowseLongClick,
         onSongMore = onSongMore,
         onPlayNext = onPlayNext,
         onAddToQueue = onAddToQueue,
@@ -689,6 +805,7 @@ private fun MixesTabHost(
     settings: UserSettings,
     bottomPadding: Dp,
     listState: LazyListState,
+    onBrowseLongClick: (ShelfItem) -> Unit,
     onSongMore: (Song) -> Unit,
     onPlayNext: (Song) -> Unit,
     onAddToQueue: (Song) -> Unit,
@@ -709,6 +826,7 @@ private fun MixesTabHost(
         listState = listState,
         onRefresh = { vm.loadMixes(isRefresh = true) },
         onItemClick = { vm.handleShelfItemClick(it) },
+        onBrowseLongClick = onBrowseLongClick,
         onSongMore = onSongMore,
         onPlayNext = onPlayNext,
         onAddToQueue = onAddToQueue,
@@ -730,6 +848,8 @@ private fun LibraryTabHost(
     onOpenDownloads: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenLogin: () -> Unit,
+    onBrowseLongClick: (ShelfItem) -> Unit,
+    onPlaylistLongClick: (com.music.musica.core.model.UserPlaylist) -> Unit,
     onSongMore: (Song) -> Unit,
     onPlayNext: (Song) -> Unit,
     onAddToQueue: (Song) -> Unit,
@@ -759,11 +879,13 @@ private fun LibraryTabHost(
         onOpenPlaylist = vm::openLocalPlaylist,
         onCreatePlaylist = vm::createPlaylist,
         onTogglePinPlaylist = vm::togglePlaylistPin,
+        onPlaylistLongClick = onPlaylistLongClick,
         onOpenDownloads = onOpenDownloads,
         onOpenHistory = onOpenHistory,
         onOpenReplay = onOpenReplay,
         onOpenLogin = onOpenLogin,
         onItemClick = { vm.handleShelfItemClick(it) },
+        onBrowseLongClick = onBrowseLongClick,
         onSongMore = onSongMore,
         onPlayNext = onPlayNext,
         onAddToQueue = onAddToQueue,
@@ -779,6 +901,7 @@ private fun SearchTabHost(
     settings: UserSettings,
     bottomPadding: Dp,
     listState: LazyListState,
+    onBrowseLongClick: (ShelfItem) -> Unit,
     onSongMore: (Song) -> Unit,
     onPlayNext: (Song) -> Unit,
     onAddToQueue: (Song) -> Unit,
@@ -788,12 +911,16 @@ private fun SearchTabHost(
     val searchSuggestions by vm.searchSuggestions.collectAsStateWithLifecycle()
     val recentSearches by vm.recentSearches.collectAsStateWithLifecycle()
     val searchResults by vm.searchResults.collectAsStateWithLifecycle()
+    val searchHasMore by vm.searchHasMore.collectAsStateWithLifecycle()
+    val searchLoadingMore by vm.searchLoadingMore.collectAsStateWithLifecycle()
     SearchScreen(
         query = searchQuery,
         filter = searchFilter,
         suggestions = searchSuggestions,
         recentQueries = recentSearches,
         results = searchResults,
+        hasMore = searchHasMore,
+        isLoadingMore = searchLoadingMore,
         activeVideoId = activeVideoId,
         downloadedIds = downloadedIds,
         hazeState = hazeState,
@@ -803,10 +930,12 @@ private fun SearchTabHost(
         listState = listState,
         onQueryChange = vm::onSearchQueryChange,
         onSubmitQuery = { q -> vm.submitSearch(q) },
+        onLoadMore = vm::loadMoreSearch,
         onFilterSelect = vm::selectSearchFilter,
         onClearRecent = vm::clearRecentSearches,
         onDeleteRecent = vm::deleteRecentSearch,
         onItemClick = { vm.handleShelfItemClick(it) },
+        onBrowseLongClick = onBrowseLongClick,
         onSongMore = onSongMore,
         onPlayNext = onPlayNext,
         onAddToQueue = onAddToQueue,
@@ -845,6 +974,7 @@ private fun SettingsOverlayHost(
         onBack = onBack,
         onSignIn = onSignIn,
         onSignOut = vm::signOut,
+        onSetSyncYtmHistory = vm::setSyncPlaybackHistoryToYtm,
         onSetCrossfade = vm::setCrossfadeSeconds,
         onSetSkipSilence = vm::setSkipSilence,
         onSetAutoplay = vm::setAutoplay,

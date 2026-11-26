@@ -41,6 +41,7 @@ data class UserSettings(
     val cellularQuality: AudioQuality = AudioQuality.MEDIUM,
     val downloadQuality: AudioQuality = AudioQuality.HIGH,
     val wifiOnlyDownloads: Boolean = false,
+    val syncPlaybackHistoryToYtm: Boolean = true,
     val crossfadeSeconds: Int = 0,
     val skipSilence: Boolean = false,
     val autoplayEnabled: Boolean = true,
@@ -73,6 +74,7 @@ class SettingsStore internal constructor(
         val CELLULAR_QUALITY = stringPreferencesKey("cellular_quality")
         val DOWNLOAD_QUALITY = stringPreferencesKey("download_quality")
         val WIFI_ONLY_DOWNLOADS = booleanPreferencesKey("wifi_only_downloads")
+        val SYNC_PLAYBACK_HISTORY_YTM = booleanPreferencesKey("sync_playback_history_ytm")
         val CROSSFADE_SECONDS = intPreferencesKey("crossfade_seconds")
         val SKIP_SILENCE = booleanPreferencesKey("skip_silence")
         val AUTOPLAY = booleanPreferencesKey("autoplay")
@@ -124,6 +126,7 @@ class SettingsStore internal constructor(
             downloadQuality = prefs[Keys.DOWNLOAD_QUALITY]?.let { runCatching { AudioQuality.valueOf(it) }.getOrNull() }
                 ?: AudioQuality.HIGH,
             wifiOnlyDownloads = prefs[Keys.WIFI_ONLY_DOWNLOADS] ?: false,
+            syncPlaybackHistoryToYtm = prefs[Keys.SYNC_PLAYBACK_HISTORY_YTM] ?: true,
             crossfadeSeconds = (prefs[Keys.CROSSFADE_SECONDS] ?: 0).coerceIn(0, 12),
             skipSilence = prefs[Keys.SKIP_SILENCE] ?: false,
             autoplayEnabled = prefs[Keys.AUTOPLAY] ?: true,
@@ -202,6 +205,10 @@ class SettingsStore internal constructor(
         dataStore.edit { it[Keys.WIFI_ONLY_DOWNLOADS] = enabled }
     }
 
+    suspend fun setSyncPlaybackHistoryToYtm(enabled: Boolean) {
+        dataStore.edit { it[Keys.SYNC_PLAYBACK_HISTORY_YTM] = enabled }
+    }
+
     suspend fun setCrossfadeSeconds(seconds: Int) {
         dataStore.edit { it[Keys.CROSSFADE_SECONDS] = seconds.coerceIn(0, 12) }
     }
@@ -258,6 +265,7 @@ class SettingsStore internal constructor(
             prefs[Keys.CELLULAR_QUALITY] = restored.cellularQuality.name
             prefs[Keys.DOWNLOAD_QUALITY] = restored.downloadQuality.name
             prefs[Keys.WIFI_ONLY_DOWNLOADS] = restored.wifiOnlyDownloads
+            prefs[Keys.SYNC_PLAYBACK_HISTORY_YTM] = restored.syncPlaybackHistoryToYtm
             prefs[Keys.CROSSFADE_SECONDS] = restored.crossfadeSeconds.coerceIn(0, 12)
             prefs[Keys.SKIP_SILENCE] = restored.skipSilence
             prefs[Keys.AUTOPLAY] = restored.autoplayEnabled

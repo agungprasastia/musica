@@ -174,6 +174,7 @@ data class DetailPage(
     val subtitle: String? = null,
     val description: String? = null,
     val thumbnailUrl: String? = null,
+    val artist: ArtistRef? = null,
     val tracks: List<Song> = emptyList(),
     val sections: List<HomeShelf> = emptyList(),
     val continuation: String? = null,
