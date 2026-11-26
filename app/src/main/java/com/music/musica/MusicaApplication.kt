@@ -80,7 +80,13 @@ class AppContainer(context: Context) {
     val audioCacheProvider: AudioCacheProvider = AudioCacheProvider(appContext)
 
     val downloadManager: DownloadManager by lazy {
-        MusicaDownloadService.createDownloadManager(appContext, audioCacheProvider)
+        MusicaDownloadService.createDownloadManager(
+            context = appContext,
+            cacheProvider = audioCacheProvider,
+            streamResolver = streamResolver,
+            downloadQualityKbpsProvider = { settingsState.value.downloadQuality.maxKbps },
+            wifiOnlyProvider = { settingsState.value.wifiOnlyDownloads },
+        )
     }
 
     private fun resolvedYtLanguage(): String {
@@ -142,6 +148,8 @@ class AppContainer(context: Context) {
         libraryRepository = libraryRepository,
         streamResolver = streamResolver,
         cacheProvider = audioCacheProvider,
+        downloadManagerProvider = { downloadManager },
+        downloadQualityKbpsProvider = { settingsState.value.downloadQuality.maxKbps },
     )
 
     val lyricsRepository: LyricsRepository = LyricsRepository(
@@ -215,6 +223,14 @@ class AppContainer(context: Context) {
                 .distinctUntilChanged()
                 .collect { limitMb ->
                     audioCacheProvider.updateStreamCacheLimitMb(limitMb)
+                }
+        }
+        appScope.launch {
+            settingsStore.settings
+                .map { it.wifiOnlyDownloads }
+                .distinctUntilChanged()
+                .collect { wifiOnly ->
+                    downloadRepository.applyWifiOnlyRequirement(wifiOnly)
                 }
         }
     }

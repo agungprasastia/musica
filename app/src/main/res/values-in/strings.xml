@@ -166,11 +166,19 @@
     <!-- Downloads -->
     <string name="downloads_title">Unduhan Offline</string>
     <string name="downloads_empty">Belum ada lagu yang diunduh</string>
+    <string name="downloads_empty_subtitle">Unduh lagu, album, atau playlist untuk didengarkan secara offline kapan saja.</string>
+    <string name="downloads_tab_tracks">Lagu</string>
+    <string name="downloads_tab_collections">Koleksi</string>
+    <string name="downloads_singles_collection">Lagu Satuan</string>
+    <string name="downloads_collection_summary">%1$d dari %2$d lagu • %3$s</string>
     <string name="downloads_status_queued">Antre</string>
+    <string name="downloads_status_waiting_wifi">Menunggu Wi-Fi…</string>
     <string name="downloads_status_downloading">Mengunduh %1$d%%</string>
     <string name="downloads_status_completed">Terunduh</string>
     <string name="downloads_status_failed">Gagal</string>
     <string name="downloads_notification_channel">Unduhan Offline</string>
+    <string name="downloads_notification_progress">Mengunduh %1$d dari %2$d — %3$d%%</string>
+    <string name="downloads_notification_waiting_wifi">Dijeda — menunggu Wi-Fi</string>
 
     <!-- Settings -->
     <string name="settings_title">Pengaturan</string>
@@ -195,10 +203,17 @@
 
     <string name="settings_wifi_quality">Kualitas Audio Wi-Fi</string>
     <string name="settings_cellular_quality">Kualitas Data Seluler</string>
+    <string name="settings_download_quality">Kualitas Unduhan</string>
+    <string name="settings_wifi_only_downloads">Unduh Hanya lewat Wi-Fi</string>
+    <string name="settings_wifi_only_downloads_desc">Jeda unduhan offline saat memakai data seluler</string>
     <string name="quality_low">Rendah (64 kbps)</string>
     <string name="quality_medium">Sedang (128 kbps)</string>
     <string name="quality_high">Tinggi (256 kbps)</string>
     <string name="quality_max">Maksimum Tersedia</string>
+    <string name="quality_short_low">Rendah</string>
+    <string name="quality_short_medium">Sedang</string>
+    <string name="quality_short_high">Tinggi</string>
+    <string name="quality_short_max">Maks</string>
 
     <string name="settings_theme">Tema</string>
     <string name="theme_system">Sistem</string>

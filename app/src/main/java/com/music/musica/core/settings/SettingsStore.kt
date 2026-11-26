@@ -39,6 +39,8 @@ data class UserSettings(
     val appLanguage: AppLanguage = AppLanguage.SYSTEM,
     val wifiQuality: AudioQuality = AudioQuality.MAX,
     val cellularQuality: AudioQuality = AudioQuality.MEDIUM,
+    val downloadQuality: AudioQuality = AudioQuality.HIGH,
+    val wifiOnlyDownloads: Boolean = false,
     val crossfadeSeconds: Int = 0,
     val skipSilence: Boolean = false,
     val autoplayEnabled: Boolean = true,
@@ -69,6 +71,8 @@ class SettingsStore internal constructor(
         val APP_LANGUAGE = stringPreferencesKey("app_language")
         val WIFI_QUALITY = stringPreferencesKey("wifi_quality")
         val CELLULAR_QUALITY = stringPreferencesKey("cellular_quality")
+        val DOWNLOAD_QUALITY = stringPreferencesKey("download_quality")
+        val WIFI_ONLY_DOWNLOADS = booleanPreferencesKey("wifi_only_downloads")
         val CROSSFADE_SECONDS = intPreferencesKey("crossfade_seconds")
         val SKIP_SILENCE = booleanPreferencesKey("skip_silence")
         val AUTOPLAY = booleanPreferencesKey("autoplay")
@@ -117,6 +121,9 @@ class SettingsStore internal constructor(
                 ?: AudioQuality.MAX,
             cellularQuality = prefs[Keys.CELLULAR_QUALITY]?.let { runCatching { AudioQuality.valueOf(it) }.getOrNull() }
                 ?: AudioQuality.MEDIUM,
+            downloadQuality = prefs[Keys.DOWNLOAD_QUALITY]?.let { runCatching { AudioQuality.valueOf(it) }.getOrNull() }
+                ?: AudioQuality.HIGH,
+            wifiOnlyDownloads = prefs[Keys.WIFI_ONLY_DOWNLOADS] ?: false,
             crossfadeSeconds = (prefs[Keys.CROSSFADE_SECONDS] ?: 0).coerceIn(0, 12),
             skipSilence = prefs[Keys.SKIP_SILENCE] ?: false,
             autoplayEnabled = prefs[Keys.AUTOPLAY] ?: true,
@@ -187,6 +194,14 @@ class SettingsStore internal constructor(
         dataStore.edit { it[Keys.CELLULAR_QUALITY] = quality.name }
     }
 
+    suspend fun setDownloadQuality(quality: AudioQuality) {
+        dataStore.edit { it[Keys.DOWNLOAD_QUALITY] = quality.name }
+    }
+
+    suspend fun setWifiOnlyDownloads(enabled: Boolean) {
+        dataStore.edit { it[Keys.WIFI_ONLY_DOWNLOADS] = enabled }
+    }
+
     suspend fun setCrossfadeSeconds(seconds: Int) {
         dataStore.edit { it[Keys.CROSSFADE_SECONDS] = seconds.coerceIn(0, 12) }
     }
@@ -241,6 +256,8 @@ class SettingsStore internal constructor(
             prefs[Keys.REDUCE_ANIMATION] = restored.reduceAnimation
             prefs[Keys.WIFI_QUALITY] = restored.wifiQuality.name
             prefs[Keys.CELLULAR_QUALITY] = restored.cellularQuality.name
+            prefs[Keys.DOWNLOAD_QUALITY] = restored.downloadQuality.name
+            prefs[Keys.WIFI_ONLY_DOWNLOADS] = restored.wifiOnlyDownloads
             prefs[Keys.CROSSFADE_SECONDS] = restored.crossfadeSeconds.coerceIn(0, 12)
             prefs[Keys.SKIP_SILENCE] = restored.skipSilence
             prefs[Keys.AUTOPLAY] = restored.autoplayEnabled

@@ -531,8 +531,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun downloadAll(songs: List<Song>) {
-        container.downloadRepository.downloadSongs(songs)
+    fun downloadAll(
+        songs: List<Song>,
+        collectionId: String? = null,
+        collectionTitle: String? = null,
+    ) {
+        container.downloadRepository.downloadSongs(songs, collectionId, collectionTitle)
+    }
+
+    fun retryDownload(song: Song) {
+        container.downloadRepository.retryDownload(song)
+    }
+
+    fun cancelDownload(videoId: String) {
+        container.downloadRepository.cancelDownload(videoId)
     }
 
     fun removeDownload(videoId: String) {
@@ -637,6 +649,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setCellularQuality(quality: AudioQuality) = viewModelScope.launch {
         container.settingsStore.setCellularQuality(quality)
         container.streamResolver.clearCache()
+    }
+    fun setDownloadQuality(quality: AudioQuality) = viewModelScope.launch {
+        container.settingsStore.setDownloadQuality(quality)
+    }
+    fun setWifiOnlyDownloads(enabled: Boolean) = viewModelScope.launch {
+        container.settingsStore.setWifiOnlyDownloads(enabled)
+        container.downloadRepository.applyWifiOnlyRequirement(enabled)
     }
     fun setPreferWordLyrics(prefer: Boolean) = viewModelScope.launch { container.settingsStore.setPreferWordSyncedLyrics(prefer) }
     fun toggleLyricsSource(src: LyricsSourceId, enabled: Boolean) = viewModelScope.launch {
