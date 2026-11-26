@@ -1,7 +1,12 @@
 package com.music.musica.ui.player
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.media.AudioManager
+import android.os.SystemClock
+import androidx.core.content.ContextCompat
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -62,9 +67,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -213,16 +220,11 @@ fun NowPlayingSheet(
             modifier = Modifier.fillMaxSize(),
         )
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding(),
-        ) {
-            // Finger-following dismiss drag handle
-            val currentOnDismiss by androidx.compose.runtime.rememberUpdatedState(onDismiss)
+        val isFullBleedArtwork = fullBleedCoverArt && activeTab == NowPlayingTab.ARTWORK
+        val currentOnDismiss by androidx.compose.runtime.rememberUpdatedState(onDismiss)
+        val dragHandle: @Composable (Modifier) -> Unit = { handleMod ->
             Box(
-                modifier = Modifier
+                modifier = handleMod
                     .fillMaxWidth()
                     .pointerInput(Unit) {
                         try {
@@ -257,8 +259,19 @@ fun NowPlayingSheet(
                         .width(38.dp)
                         .height(5.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.36f)),
+                        .background(Color.White.copy(alpha = 0.42f)),
                 )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (!isFullBleedArtwork) Modifier.statusBarsPadding() else Modifier)
+                .navigationBarsPadding(),
+        ) {
+            if (!isFullBleedArtwork) {
+                dragHandle(Modifier)
             }
 
             // Smooth 420ms unified content area: Full Artwork vs Lyrics vs Queue
@@ -613,6 +626,14 @@ fun NowPlayingSheet(
                     )
                 }
             }
+        }
+
+        if (isFullBleedArtwork) {
+            dragHandle(
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding(),
+            )
         }
     }
 }
@@ -970,10 +991,29 @@ private fun VolumeControlRow(modifier: Modifier = Modifier) {
                 .coerceIn(0f, 1f),
         )
     }
+    var lastUserChangeAtMs by remember { mutableLongStateOf(0L) }
 
     LaunchedEffect(audioManager) {
         val cur = audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: return@LaunchedEffect
         fraction = (cur.toFloat() / maxVol.toFloat()).coerceIn(0f, 1f)
+    }
+
+    DisposableEffect(context, audioManager, maxVol) {
+        if (audioManager == null) return@DisposableEffect onDispose {}
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                if (SystemClock.elapsedRealtime() - lastUserChangeAtMs < 250L) return
+                val cur = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                fraction = (cur.toFloat() / maxVol.toFloat()).coerceIn(0f, 1f)
+            }
+        }
+        val filter = IntentFilter("android.media.VOLUME_CHANGED_ACTION")
+        runCatching {
+            ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        }
+        onDispose {
+            runCatching { context.unregisterReceiver(receiver) }
+        }
     }
 
     Row(
@@ -990,6 +1030,7 @@ private fun VolumeControlRow(modifier: Modifier = Modifier) {
         ThinSlider(
             value = fraction,
             onValueChange = { next ->
+                lastUserChangeAtMs = SystemClock.elapsedRealtime()
                 fraction = next
                 val target = (next * maxVol).roundToInt().coerceIn(0, maxVol)
                 runCatching {

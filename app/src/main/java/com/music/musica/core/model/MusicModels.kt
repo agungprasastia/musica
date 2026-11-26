@@ -216,6 +216,7 @@ data class UserPlaylist(
     val thumbnailUrl: String? = null,
     val songCount: Int = 0,
     val isRemoteYtm: Boolean = false,
+    val isPinned: Boolean = false,
 )
 
 enum class AudioQuality(val maxKbps: Int) {

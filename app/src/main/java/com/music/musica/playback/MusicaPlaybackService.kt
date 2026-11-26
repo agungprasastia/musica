@@ -101,6 +101,7 @@ class MusicaPlaybackService : MediaSessionService() {
     private var crossfadeJob: Job? = null
     private var autoplayJob: Job? = null
     private var retryJob: Job? = null
+    private var sleepFadeJob: Job? = null
 
     // Accurate listening-time tracker (counts only actual playing time, not paused intervals)
     private var accumulatedPlayMs: Long = 0L
@@ -153,6 +154,7 @@ class MusicaPlaybackService : MediaSessionService() {
     override fun onDestroy() {
         recordCompletedListeningSession()
         cancelCrossfade()
+        cancelSleepFade()
         positionJob?.cancel()
         autoplayJob?.cancel()
         retryJob?.cancel()
@@ -172,6 +174,7 @@ class MusicaPlaybackService : MediaSessionService() {
         if (songs.isEmpty()) return
         recordCompletedListeningSession()
         cancelCrossfade()
+        cancelSleepFade()
         retryJob?.cancel()
         container.autoplayController.reset()
         queueManager.setQueue(songs, startIndex, shuffled)
@@ -183,6 +186,7 @@ class MusicaPlaybackService : MediaSessionService() {
     fun selectQueueIndex(index: Int) {
         recordCompletedListeningSession()
         cancelCrossfade()
+        cancelSleepFade()
         retryJob?.cancel()
         if (queueManager.selectIndex(index) != null) {
             loadCurrentFromQueue(autoPlay = true)
@@ -237,6 +241,7 @@ class MusicaPlaybackService : MediaSessionService() {
 
     fun togglePlayPause() {
         cancelCrossfade()
+        cancelSleepFade()
         if (activePlayer.isPlaying) {
             activePlayer.pause()
         } else {
@@ -252,6 +257,7 @@ class MusicaPlaybackService : MediaSessionService() {
     fun skipNext(manual: Boolean = true) {
         recordCompletedListeningSession()
         cancelCrossfade()
+        cancelSleepFade()
         retryJob?.cancel()
         val next = queueManager.nextIndex(manualSkip = manual)
         if (next != null) {
@@ -266,6 +272,7 @@ class MusicaPlaybackService : MediaSessionService() {
 
     fun skipPrevious() {
         cancelCrossfade()
+        cancelSleepFade()
         if (activePlayer.currentPosition > 3_500L) {
             activePlayer.seekTo(0L)
             return
@@ -282,6 +289,7 @@ class MusicaPlaybackService : MediaSessionService() {
 
     fun seekTo(positionMs: Long) {
         cancelCrossfade()
+        cancelSleepFade()
         val target = positionMs.coerceAtLeast(0L)
         activePlayer.seekTo(target)
         _progress.update { it.copy(positionMs = target) }
@@ -315,8 +323,43 @@ class MusicaPlaybackService : MediaSessionService() {
 
     fun pauseForSleepTimer() {
         cancelCrossfade()
-        activePlayer.pause()
-        syncUiState()
+        cancelSleepFade()
+        val fadeEnabled = container.settingsState.value.sleepTimerFadeOut
+        if (!fadeEnabled || !activePlayer.isPlaying) {
+            activePlayer.pause()
+            activePlayer.volume = 1f
+            syncUiState()
+            return
+        }
+        val targetPlayer = activePlayer
+        sleepFadeJob = serviceScope.launch {
+            val startAt = System.currentTimeMillis()
+            while (isActive && targetPlayer === activePlayer && targetPlayer.isPlaying) {
+                val elapsed = System.currentTimeMillis() - startAt
+                val progress = (elapsed.toFloat() / SLEEP_FADE_DURATION_MS).coerceIn(0f, 1f)
+                // Smooth equal-power cosine fade-out down to silence
+                val gain = kotlin.math.cos(progress * (Math.PI / 2.0)).toFloat().coerceIn(0f, 1f)
+                targetPlayer.volume = gain
+                if (progress >= 1f) break
+                delay(40L)
+            }
+            if (targetPlayer === activePlayer) {
+                targetPlayer.pause()
+                targetPlayer.volume = 1f
+                syncUiState()
+            }
+            sleepFadeJob = null
+        }
+    }
+
+    private fun cancelSleepFade() {
+        if (sleepFadeJob != null) {
+            sleepFadeJob?.cancel()
+            sleepFadeJob = null
+            if (crossfadeStateMachine.status.phase == CrossfadePhase.IDLE) {
+                activePlayer.volume = 1f
+            }
+        }
     }
 
     fun updateSleepTimerUi(remainingMs: Long?, afterTrack: Boolean) {
@@ -356,6 +399,7 @@ class MusicaPlaybackService : MediaSessionService() {
             override fun seekToPreviousMediaItem() = skipPrevious()
             override fun seekTo(positionMs: Long) {
                 cancelCrossfade()
+                cancelSleepFade()
                 super.seekTo(positionMs)
             }
         }
@@ -496,8 +540,9 @@ class MusicaPlaybackService : MediaSessionService() {
                 (lastRetriedVideoId != song.videoId || retryCountForCurrent < MAX_RETRIES_PER_TRACK)
 
             if (canRetry) {
+                val isSameTrack = lastRetriedVideoId == song.videoId
                 lastRetriedVideoId = song.videoId
-                retryCountForCurrent = if (lastRetriedVideoId == song.videoId) retryCountForCurrent + 1 else 1
+                retryCountForCurrent = if (isSameTrack) retryCountForCurrent + 1 else 1
                 retryJob?.cancel()
                 retryJob = serviceScope.launch {
                     container.streamResolver.invalidate(song.videoId)
@@ -532,6 +577,7 @@ class MusicaPlaybackService : MediaSessionService() {
         resumeAtMs: Long = 0L,
         resetRetry: Boolean = true,
     ) {
+        cancelSleepFade()
         val song = queueManager.currentSong ?: return
         if (resetRetry) {
             accumulatedPlayMs = 0L
@@ -810,6 +856,7 @@ class MusicaPlaybackService : MediaSessionService() {
     companion object {
         private const val TAG = "MusicaPlayback"
         private const val MAX_RETRIES_PER_TRACK = 1
+        private const val SLEEP_FADE_DURATION_MS = 3_000L
         const val MUSICA_SCHEME = "musica"
 
         @Volatile

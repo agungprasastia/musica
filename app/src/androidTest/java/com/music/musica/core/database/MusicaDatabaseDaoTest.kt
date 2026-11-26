@@ -320,6 +320,40 @@ class MusicaDatabaseDaoTest {
         assertTrue(downloadDao.getCompletedIds().isEmpty())
     }
 
+    @Test
+    fun pinnedPlaylistsAndDislikeAndSubscribedArtistsPersistProperly() = runTest {
+        songDao.insertIgnore(SongEntity.fromSong(sampleSong("s_dl", "Track")))
+        songDao.setLiked("s_dl", liked = true, likedAtMs = 1_000L)
+        assertTrue(songDao.getById("s_dl")!!.isLiked)
+
+        // Disliking clears liked flag
+        songDao.setDisliked("s_dl", disliked = true)
+        val afterDislike = songDao.getById("s_dl")!!
+        assertTrue(afterDislike.isDisliked)
+        assertFalse(afterDislike.isLiked)
+
+        // Pinning orders pinned playlists ahead of newer unpinned playlists
+        playlistDao.upsertPlaylist(PlaylistEntity("pl_a", "Old Pinned", updatedAtMs = 1_000L))
+        playlistDao.upsertPlaylist(PlaylistEntity("pl_b", "Newest Unpinned", updatedAtMs = 9_000L))
+        playlistDao.setPinned("pl_a", pinned = true, pinnedAtMs = 5_000L)
+
+        val ordered = playlistDao.observePlaylistsWithCounts().first().map { it.playlist.playlistId }
+        assertEquals(listOf("pl_a", "pl_b"), ordered)
+
+        // Subscribed artists & saved collections round-trip
+        val artistDao = database.subscribedArtistDao()
+        artistDao.upsert(SubscribedArtistEntity("UC_1", "Artist One", subscribedAtMs = 1_000L))
+        assertTrue(artistDao.isSubscribed("UC_1"))
+        artistDao.delete("UC_1")
+        assertFalse(artistDao.isSubscribed("UC_1"))
+
+        val collectionDao = database.savedCollectionDao()
+        collectionDao.upsert(SavedCollectionEntity("MPRE_1", "ALBUM", "Album One", savedAtMs = 2_000L))
+        assertEquals(listOf("MPRE_1"), collectionDao.observeIds().first())
+        collectionDao.delete("MPRE_1")
+        assertTrue(collectionDao.observeIds().first().isEmpty())
+    }
+
     private fun sampleSong(
         videoId: String,
         title: String,

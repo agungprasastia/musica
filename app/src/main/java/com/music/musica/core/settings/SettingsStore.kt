@@ -48,7 +48,10 @@ data class UserSettings(
     val lyricsSourceOrder: List<LyricsSourceId> = LyricsSourceId.entries.toList(),
 )
 
-class SettingsStore(private val context: Context) {
+class SettingsStore internal constructor(
+    private val dataStore: DataStore<Preferences>,
+) {
+    constructor(context: Context) : this(context.settingsDataStore)
 
     private object Keys {
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
@@ -75,7 +78,7 @@ class SettingsStore(private val context: Context) {
         val LYRICS_ORDER = stringPreferencesKey("lyrics_order")
     }
 
-    val settings: Flow<UserSettings> = context.settingsDataStore.data.map { prefs ->
+    val settings: Flow<UserSettings> = dataStore.data.map { prefs ->
         val enabledRaw = prefs[Keys.ENABLED_LYRICS]
         val enabledLyrics = if (enabledRaw == null) {
             LyricsSourceId.entries.toSet()
@@ -125,87 +128,87 @@ class SettingsStore(private val context: Context) {
     }
 
     suspend fun setOnboardingCompleted(completed: Boolean) {
-        context.settingsDataStore.edit { it[Keys.ONBOARDING_COMPLETED] = completed }
+        dataStore.edit { it[Keys.ONBOARDING_COMPLETED] = completed }
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {
-        context.settingsDataStore.edit { it[Keys.THEME_MODE] = mode.name }
+        dataStore.edit { it[Keys.THEME_MODE] = mode.name }
     }
 
     suspend fun setPlayerTheme(theme: PlayerTheme) {
-        context.settingsDataStore.edit { it[Keys.PLAYER_THEME] = theme.name }
+        dataStore.edit { it[Keys.PLAYER_THEME] = theme.name }
     }
 
     suspend fun setFullBleedCoverArt(enabled: Boolean) {
-        context.settingsDataStore.edit { it[Keys.FULL_BLEED_COVER] = enabled }
+        dataStore.edit { it[Keys.FULL_BLEED_COVER] = enabled }
     }
 
     suspend fun setShowVolumeSlider(enabled: Boolean) {
-        context.settingsDataStore.edit { it[Keys.SHOW_VOLUME_SLIDER] = enabled }
+        dataStore.edit { it[Keys.SHOW_VOLUME_SLIDER] = enabled }
     }
 
     suspend fun setShowRemainingTime(enabled: Boolean) {
-        context.settingsDataStore.edit { it[Keys.SHOW_REMAINING_TIME] = enabled }
+        dataStore.edit { it[Keys.SHOW_REMAINING_TIME] = enabled }
     }
 
     suspend fun setBlurUnfocusedLyrics(enabled: Boolean) {
-        context.settingsDataStore.edit { it[Keys.BLUR_UNFOCUSED_LYRICS] = enabled }
+        dataStore.edit { it[Keys.BLUR_UNFOCUSED_LYRICS] = enabled }
     }
 
     suspend fun setShowLyricsPreviewStrip(enabled: Boolean) {
-        context.settingsDataStore.edit { it[Keys.SHOW_LYRICS_PREVIEW] = enabled }
+        dataStore.edit { it[Keys.SHOW_LYRICS_PREVIEW] = enabled }
     }
 
     suspend fun setSleepTimerFadeOut(enabled: Boolean) {
-        context.settingsDataStore.edit { it[Keys.SLEEP_FADE_OUT] = enabled }
+        dataStore.edit { it[Keys.SLEEP_FADE_OUT] = enabled }
     }
 
     suspend fun setAudioCacheLimitMb(mb: Int) {
-        context.settingsDataStore.edit { it[Keys.AUDIO_CACHE_LIMIT_MB] = mb.coerceIn(128, 4096) }
+        dataStore.edit { it[Keys.AUDIO_CACHE_LIMIT_MB] = mb.coerceIn(128, 4096) }
     }
 
     suspend fun setFrostedGlass(enabled: Boolean) {
-        context.settingsDataStore.edit { it[Keys.FROSTED_GLASS] = enabled }
+        dataStore.edit { it[Keys.FROSTED_GLASS] = enabled }
     }
 
     suspend fun setReduceAnimation(enabled: Boolean) {
-        context.settingsDataStore.edit { it[Keys.REDUCE_ANIMATION] = enabled }
+        dataStore.edit { it[Keys.REDUCE_ANIMATION] = enabled }
     }
 
     suspend fun setAppLanguage(language: AppLanguage) {
-        context.settingsDataStore.edit { it[Keys.APP_LANGUAGE] = language.name }
+        dataStore.edit { it[Keys.APP_LANGUAGE] = language.name }
     }
 
     suspend fun setWifiQuality(quality: AudioQuality) {
-        context.settingsDataStore.edit { it[Keys.WIFI_QUALITY] = quality.name }
+        dataStore.edit { it[Keys.WIFI_QUALITY] = quality.name }
     }
 
     suspend fun setCellularQuality(quality: AudioQuality) {
-        context.settingsDataStore.edit { it[Keys.CELLULAR_QUALITY] = quality.name }
+        dataStore.edit { it[Keys.CELLULAR_QUALITY] = quality.name }
     }
 
     suspend fun setCrossfadeSeconds(seconds: Int) {
-        context.settingsDataStore.edit { it[Keys.CROSSFADE_SECONDS] = seconds.coerceIn(0, 12) }
+        dataStore.edit { it[Keys.CROSSFADE_SECONDS] = seconds.coerceIn(0, 12) }
     }
 
     suspend fun setSkipSilence(enabled: Boolean) {
-        context.settingsDataStore.edit { it[Keys.SKIP_SILENCE] = enabled }
+        dataStore.edit { it[Keys.SKIP_SILENCE] = enabled }
     }
 
     suspend fun setAutoplay(enabled: Boolean) {
-        context.settingsDataStore.edit { it[Keys.AUTOPLAY] = enabled }
+        dataStore.edit { it[Keys.AUTOPLAY] = enabled }
     }
 
     suspend fun setPlaybackSpeed(speed: Float) {
-        context.settingsDataStore.edit { it[Keys.PLAYBACK_SPEED] = speed.coerceIn(0.5f, 2.0f) }
+        dataStore.edit { it[Keys.PLAYBACK_SPEED] = speed.coerceIn(0.5f, 2.0f) }
     }
 
     suspend fun setPreferWordSyncedLyrics(prefer: Boolean) {
-        context.settingsDataStore.edit { it[Keys.PREFER_WORD_LYRICS] = prefer }
+        dataStore.edit { it[Keys.PREFER_WORD_LYRICS] = prefer }
     }
 
     suspend fun toggleLyricsSource(source: LyricsSourceId, enabled: Boolean) {
-        context.settingsDataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val current = prefs[Keys.ENABLED_LYRICS]
                 ?.split(",")
                 ?.filter { it.isNotBlank() }
@@ -218,13 +221,13 @@ class SettingsStore(private val context: Context) {
     }
 
     suspend fun setLyricsSourceOrder(order: List<LyricsSourceId>) {
-        context.settingsDataStore.edit {
+        dataStore.edit {
             it[Keys.LYRICS_ORDER] = order.distinct().joinToString(",") { src -> src.name }
         }
     }
 
     suspend fun restoreFrom(restored: UserSettings) {
-        context.settingsDataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[Keys.THEME_MODE] = restored.themeMode.name
             prefs[Keys.PLAYER_THEME] = restored.playerTheme.name
             prefs[Keys.FULL_BLEED_COVER] = restored.fullBleedCoverArt

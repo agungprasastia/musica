@@ -1,5 +1,6 @@
 package com.music.musica.core.database
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -24,6 +25,7 @@ data class SongEntity(
     val isExplicit: Boolean = false,
     val isLiked: Boolean = false,
     val likedAtMs: Long = 0L,
+    @ColumnInfo(defaultValue = "0") val isDisliked: Boolean = false,
 ) {
     fun toSong(): Song {
         val artists = runCatching {
@@ -64,6 +66,8 @@ data class PlaylistEntity(
     val thumbnailUrl: String? = null,
     val isRemoteYtm: Boolean = false,
     val updatedAtMs: Long = System.currentTimeMillis(),
+    @ColumnInfo(defaultValue = "0") val isPinned: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val pinnedAtMs: Long = 0L,
 ) {
     fun toUserPlaylist(songCount: Int = 0): UserPlaylist = UserPlaylist(
         playlistId = playlistId,
@@ -72,6 +76,7 @@ data class PlaylistEntity(
         thumbnailUrl = thumbnailUrl,
         songCount = songCount,
         isRemoteYtm = isRemoteYtm,
+        isPinned = isPinned,
     )
 }
 
@@ -132,7 +137,27 @@ data class DownloadEntity(
     val fileSizeBytes: Long = 0L,
     val qualityKbps: Int = 0,
     val updatedAtMs: Long = System.currentTimeMillis(),
+    val collectionId: String? = null,
+    val collectionTitle: String? = null,
 ) {
     val downloadState: DownloadState
         get() = runCatching { DownloadState.valueOf(status) }.getOrDefault(DownloadState.QUEUED)
 }
+
+@Entity(tableName = "subscribed_artists")
+data class SubscribedArtistEntity(
+    @PrimaryKey val browseId: String,
+    val name: String,
+    val thumbnailUrl: String? = null,
+    val subscribedAtMs: Long = System.currentTimeMillis(),
+)
+
+@Entity(tableName = "saved_collections")
+data class SavedCollectionEntity(
+    @PrimaryKey val browseId: String,
+    val type: String,
+    val title: String,
+    val subtitle: String? = null,
+    val thumbnailUrl: String? = null,
+    val savedAtMs: Long = System.currentTimeMillis(),
+)
