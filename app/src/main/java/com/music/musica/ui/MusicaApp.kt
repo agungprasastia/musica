@@ -230,6 +230,7 @@ internal fun MusicaAppRoot(
         } else {
             OnboardingScreen(
                 reduceAnimation = settings.reduceAnimation,
+                isSignedIn = authSession?.isSignedIn == true,
                 onSignInWithGoogle = { onboardingLoginOpen = true },
                 onContinueGuest = { vm.completeOnboarding() },
             )

@@ -1,6 +1,5 @@
 package com.music.musica.ui.screens
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -60,9 +59,6 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
@@ -83,6 +79,7 @@ import com.music.musica.core.model.UiState
 import com.music.musica.core.model.upsizeArtworkUrl
 import com.music.musica.ui.components.AnimatedSignInBanner
 import com.music.musica.ui.components.FeedSkeleton
+import com.music.musica.ui.components.MusicaBrandEmblem
 import com.music.musica.ui.components.PagedTrackCarousel
 import com.music.musica.ui.components.ShelfSection
 import com.music.musica.ui.components.TopFadeBlur
@@ -90,6 +87,7 @@ import com.music.musica.ui.components.glassContentColor
 import com.music.musica.ui.components.lightweightGlass
 import com.music.musica.ui.components.rememberBlurredArtwork
 import com.music.musica.ui.components.thumbnailBorder
+import com.music.musica.ui.theme.MusicaAccentRed
 import dev.chrisbanes.haze.HazeState
 
 private const val TOP_PICK_RATIO = 0.75f
@@ -162,8 +160,8 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         MusicaBrandEmblem(
-                            color = MaterialTheme.colorScheme.onBackground,
-                            modifier = Modifier.size(width = 40.dp, height = 28.dp),
+                            color = MusicaAccentRed,
+                            modifier = Modifier.size(34.dp),
                         )
 
                         Row(
@@ -344,43 +342,6 @@ fun HomeScreen(
                 frostedGlassEnabled = frostedGlassEnabled,
                 modifier = Modifier.align(Alignment.TopCenter),
             )
-        }
-    }
-}
-
-/**
- * Clean-room Musica acoustic wave emblem rendered in the Home top-left slot.
- */
-@Composable
-internal fun MusicaBrandEmblem(
-    color: Color,
-    modifier: Modifier = Modifier,
-) {
-    Canvas(modifier = modifier) {
-        val w = size.width
-        val h = size.height
-        val stroke = Stroke(width = h * 0.145f, cap = StrokeCap.Round)
-        val curves = listOf(
-            Triple(0.14f, 0.22f, 0.90f),
-            Triple(0.06f, 0.52f, 0.96f),
-            Triple(0.00f, 0.82f, 1.00f),
-        )
-        curves.forEach { (startXFrac, yFrac, endXFrac) ->
-            val path = Path().apply {
-                val sx = w * startXFrac
-                val ex = w * endXFrac
-                val y = h * yFrac
-                moveTo(sx, y)
-                cubicTo(
-                    sx + (ex - sx) * 0.34f,
-                    y + h * 0.16f,
-                    sx + (ex - sx) * 0.68f,
-                    y + h * 0.14f,
-                    ex,
-                    y - h * 0.04f,
-                )
-            }
-            drawPath(path = path, color = color, style = stroke)
         }
     }
 }
