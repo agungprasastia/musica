@@ -265,4 +265,123 @@ class InnertubeParsersTest {
         assertEquals("@ari_music", profile?.handle)
         assertEquals("https://img/avatar.jpg", profile?.avatarUrl)
     }
+
+    @Test
+    fun parseDetailContinuationAndSearchContinuationExtractTracksAndNextTokens() {
+        val detailContJson = """
+        {
+          "continuationContents": {
+            "musicPlaylistShelfContinuation": {
+              "contents": [{
+                "musicResponsiveListItemRenderer": {
+                  "playlistItemData": { "videoId": "vid_101", "playlistSetVideoId": "sv_101" },
+                  "flexColumns": [
+                    { "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": "Song 101" }] } } },
+                    { "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": "Nova" }] } } }
+                  ]
+                }
+              }],
+              "continuations": [{ "nextContinuationData": { "continuation": "CONT_PAGE_3" } }]
+            }
+          }
+        }
+        """.trimIndent()
+        val (tracks, nextDetail) = InnertubeParsers.parseDetailContinuation(
+            "VLPL_BIG",
+            json.parseToJsonElement(detailContJson).jsonObject,
+        )
+        assertEquals(1, tracks.size)
+        assertEquals("vid_101", tracks[0].videoId)
+        assertEquals("sv_101", tracks[0].setVideoId)
+        assertEquals("CONT_PAGE_3", nextDetail)
+
+        val searchContJson = """
+        {
+          "continuationContents": {
+            "musicShelfContinuation": {
+              "contents": [{
+                "musicResponsiveListItemRenderer": {
+                  "playlistItemData": { "videoId": "search_21" },
+                  "flexColumns": [
+                    { "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": "Page 2 Song" }] } } }
+                  ]
+                }
+              }],
+              "continuations": [{ "nextContinuationData": { "continuation": "SEARCH_NEXT_3" } }]
+            }
+          }
+        }
+        """.trimIndent()
+        val searchPage = InnertubeParsers.parseSearchPage(json.parseToJsonElement(searchContJson).jsonObject)
+        assertEquals(1, searchPage.items.size)
+        assertEquals("SEARCH_NEXT_3", searchPage.continuation)
+    }
+
+    @Test
+    fun parseDetailPageExtractsAlbumStraplineArtistAndArtistSeeAllParams() {
+        val albumJson = """
+        {
+          "header": {
+            "musicResponsiveHeaderRenderer": {
+              "title": { "runs": [{ "text": "Solaris" }] },
+              "straplineTextOne": {
+                "runs": [{
+                  "text": "Klara",
+                  "navigationEndpoint": { "browseEndpoint": { "browseId": "UC_klara" } }
+                }]
+              }
+            }
+          },
+          "contents": { "twoColumnBrowseResultsRenderer": { "secondaryContents": { "sectionListRenderer": { "contents": [] } } } }
+        }
+        """.trimIndent()
+        val album = InnertubeParsers.parseDetailPage("MPREb_solaris", json.parseToJsonElement(albumJson).jsonObject)
+        assertEquals("Klara", album.artist?.name)
+        assertEquals("UC_klara", album.artist?.browseId)
+
+        val artistJson = """
+        {
+          "header": { "musicImmersiveHeaderRenderer": { "title": { "runs": [{ "text": "Klara" }] } } },
+          "contents": {
+            "singleColumnBrowseResultsRenderer": {
+              "tabs": [{
+                "tabRenderer": {
+                  "selected": true,
+                  "content": {
+                    "sectionListRenderer": {
+                      "contents": [{
+                        "musicCarouselShelfRenderer": {
+                          "header": {
+                            "musicCarouselShelfBasicHeaderRenderer": {
+                              "title": { "runs": [{ "text": "Albums" }] },
+                              "moreContentButton": {
+                                "buttonRenderer": {
+                                  "navigationEndpoint": {
+                                    "browseEndpoint": { "browseId": "MPADUC_klara", "params": "ALBUMS_PARAM_1" }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "contents": [{
+                            "musicTwoRowItemRenderer": {
+                              "title": { "runs": [{ "text": "Solaris" }] },
+                              "navigationEndpoint": { "browseEndpoint": { "browseId": "MPREb_solaris" } }
+                            }
+                          }]
+                        }
+                      }]
+                    }
+                  }
+                }
+              }]
+            }
+          }
+        }
+        """.trimIndent()
+        val artist = InnertubeParsers.parseDetailPage("UC_klara", json.parseToJsonElement(artistJson).jsonObject)
+        assertEquals(1, artist.sections.size)
+        assertEquals("MPADUC_klara", artist.sections[0].browseId)
+        assertEquals("ALBUMS_PARAM_1", artist.sections[0].params)
+    }
 }

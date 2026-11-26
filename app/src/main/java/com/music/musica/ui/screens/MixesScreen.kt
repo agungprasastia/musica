@@ -92,6 +92,7 @@ fun MixesScreen(
     listState: LazyListState = rememberLazyListState(),
     onRefresh: () -> Unit,
     onItemClick: (ShelfItem) -> Unit,
+    onBrowseLongClick: ((ShelfItem) -> Unit)? = null,
     onSongMore: (Song) -> Unit,
     onPlayNext: (Song) -> Unit,
     onAddToQueue: (Song) -> Unit,
@@ -166,6 +167,7 @@ fun MixesScreen(
                                     StationTilesGrid(
                                         stations = feed.stations,
                                         onItemClick = onItemClick,
+                                        onBrowseLongClick = onBrowseLongClick,
                                         onSongMore = onSongMore,
                                     )
                                 }
@@ -181,6 +183,7 @@ fun MixesScreen(
                                         items = feed.featured,
                                         reduceAnimation = reduceAnimation,
                                         onItemClick = onItemClick,
+                                        onBrowseLongClick = onBrowseLongClick,
                                         onSongMore = onSongMore,
                                     )
                                 }
@@ -196,6 +199,7 @@ fun MixesScreen(
                                     downloadedIds = downloadedIds,
                                     onItemClick = onItemClick,
                                     onSongMore = onSongMore,
+                                    onBrowseLongClick = onBrowseLongClick,
                                     onPlayNext = onPlayNext,
                                     onAddToQueue = onAddToQueue,
                                 )
@@ -230,6 +234,7 @@ fun MixesScreen(
 private fun StationTilesGrid(
     stations: List<ShelfItem>,
     onItemClick: (ShelfItem) -> Unit,
+    onBrowseLongClick: ((ShelfItem) -> Unit)? = null,
     onSongMore: (Song) -> Unit,
 ) {
     BoxWithConstraints(
@@ -249,7 +254,12 @@ private fun StationTilesGrid(
                         BlurredStationTile(
                             item = item,
                             onClick = { onItemClick(item) },
-                            onLongClick = (item as? ShelfItem.Track)?.let { t -> { onSongMore(t.song) } },
+                            onLongClick = when (item) {
+                                is ShelfItem.Track -> {
+                                    { onSongMore(item.song) }
+                                }
+                                else -> onBrowseLongClick?.let { handler -> { handler(item) } }
+                            },
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -371,6 +381,7 @@ private fun MixFeatureCarousel(
     items: List<ShelfItem>,
     reduceAnimation: Boolean,
     onItemClick: (ShelfItem) -> Unit,
+    onBrowseLongClick: ((ShelfItem) -> Unit)? = null,
     onSongMore: (Song) -> Unit,
 ) {
     val pagerState = rememberPagerState(pageCount = { items.size })
@@ -406,7 +417,12 @@ private fun MixFeatureCarousel(
                 item = item,
                 reduceAnimation = reduceAnimation,
                 onClick = { onItemClick(item) },
-                onLongClick = (item as? ShelfItem.Track)?.let { t -> { onSongMore(t.song) } },
+                onLongClick = when (item) {
+                    is ShelfItem.Track -> {
+                        { onSongMore(item.song) }
+                    }
+                    else -> onBrowseLongClick?.let { handler -> { handler(item) } }
+                },
             )
         }
     }

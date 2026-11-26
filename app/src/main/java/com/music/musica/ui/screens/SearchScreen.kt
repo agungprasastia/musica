@@ -1,8 +1,10 @@
 package com.music.musica.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +36,7 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,11 +45,15 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -78,6 +85,7 @@ import dev.chrisbanes.haze.HazeState
  * - Promoted TopResultCard (72dp art + Play & Queue buttons) + grouped ALL sections with inset dividers
  * - Shimmer SongListSkeleton (circular for Artists) + SwipeToQueueBox on all tracks
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SearchScreen(
     query: String,
@@ -85,6 +93,8 @@ fun SearchScreen(
     suggestions: List<String>,
     recentQueries: List<String>,
     results: UiState<List<ShelfItem>>?,
+    hasMore: Boolean = false,
+    isLoadingMore: Boolean = false,
     activeVideoId: String?,
     downloadedIds: Set<String>,
     hazeState: HazeState,
@@ -94,15 +104,27 @@ fun SearchScreen(
     listState: LazyListState = rememberLazyListState(),
     onQueryChange: (String) -> Unit,
     onSubmitQuery: (String) -> Unit,
+    onLoadMore: () -> Unit = {},
     onFilterSelect: (SearchFilter) -> Unit,
     onClearRecent: () -> Unit,
     onDeleteRecent: (String) -> Unit,
     onItemClick: (ShelfItem) -> Unit,
+    onBrowseLongClick: ((ShelfItem) -> Unit)? = null,
     onSongMore: (Song) -> Unit,
     onPlayNext: (Song) -> Unit,
     onAddToQueue: (Song) -> Unit,
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(listState, hasMore, isLoadingMore) {
+        if (!hasMore || isLoadingMore) return@LaunchedEffect
+        snapshotFlow {
+            val layout = listState.layoutInfo
+            val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: 0
+            layout.totalItemsCount > 0 && lastVisible >= layout.totalItemsCount - 5
+        }.collect { nearEnd ->
+            if (nearEnd) onLoadMore()
+        }
+    }
     val filterOptions = listOf(
         stringResource(R.string.search_filter_all),
         stringResource(R.string.search_filter_songs),
@@ -362,6 +384,12 @@ fun SearchScreen(
                                     TopResultCard(
                                         item = topResult,
                                         onClick = { onItemClick(topResult) },
+                                        onLongClick = when (topResult) {
+                                            is ShelfItem.Track -> {
+                                                { onSongMore(topResult.song) }
+                                            }
+                                            else -> onBrowseLongClick?.let { handler -> { handler(topResult) } }
+                                        },
                                         onQueue = (topResult as? ShelfItem.Track)?.let { t -> { onAddToQueue(t.song) } },
                                     )
                                 }
@@ -393,6 +421,7 @@ fun SearchScreen(
                                             item = artist,
                                             showDivider = idx < artists.lastIndex,
                                             onClick = { onItemClick(artist) },
+                                            onLongClick = onBrowseLongClick?.let { handler -> { handler(artist) } },
                                         )
                                     }
                                 }
@@ -406,6 +435,7 @@ fun SearchScreen(
                                             item = album,
                                             showDivider = idx < albums.lastIndex,
                                             onClick = { onItemClick(album) },
+                                            onLongClick = onBrowseLongClick?.let { handler -> { handler(album) } },
                                         )
                                     }
                                 }
@@ -419,6 +449,7 @@ fun SearchScreen(
                                             item = pl,
                                             showDivider = idx < playlists.lastIndex,
                                             onClick = { onItemClick(pl) },
+                                            onLongClick = onBrowseLongClick?.let { handler -> { handler(pl) } },
                                         )
                                     }
                                 }
@@ -443,6 +474,24 @@ fun SearchScreen(
                                             item = item,
                                             showDivider = idx < results.data.lastIndex,
                                             onClick = { onItemClick(item) },
+                                            onLongClick = onBrowseLongClick?.let { handler -> { handler(item) } },
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (hasMore || isLoadingMore) {
+                                item(key = "search_load_more") {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 18.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        CircularProgressIndicator(
+                                            color = MaterialTheme.colorScheme.primary,
+                                            strokeWidth = 2.5.dp,
+                                            modifier = Modifier.size(24.dp),
                                         )
                                     }
                                 }
@@ -461,18 +510,29 @@ fun SearchScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TopResultCard(
     item: ShelfItem,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     onQueue: (() -> Unit)?,
 ) {
+    val haptics = LocalHapticFeedback.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .glassCard(RoundedCornerShape(20.dp))
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick?.let { menu ->
+                    {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        menu()
+                    }
+                },
+            )
             .padding(14.dp),
     ) {
         Text(
@@ -563,17 +623,28 @@ private fun SearchSectionHeader(title: String) {
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SearchBrowseRow(
     item: ShelfItem,
     showDivider: Boolean,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
 ) {
+    val haptics = LocalHapticFeedback.current
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onClick)
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = onLongClick?.let { menu ->
+                        {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            menu()
+                        }
+                    },
+                )
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

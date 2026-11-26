@@ -69,6 +69,12 @@ interface SongDao {
 
     @Query("SELECT videoId FROM songs WHERE isLiked = 1")
     fun observeLikedIds(): Flow<List<String>>
+
+    @Query("SELECT * FROM songs")
+    suspend fun getAllSongs(): List<SongEntity>
+
+    @Upsert
+    suspend fun upsert(song: SongEntity)
 }
 
 @Dao
@@ -114,6 +120,18 @@ interface PlaylistDao {
 
     @Query("SELECT * FROM playlists WHERE playlistId = :playlistId LIMIT 1")
     suspend fun getPlaylist(playlistId: String): PlaylistEntity?
+
+    @Query("UPDATE playlists SET title = :title, description = :description, updatedAtMs = :updatedAtMs WHERE playlistId = :playlistId")
+    suspend fun renamePlaylist(playlistId: String, title: String, description: String, updatedAtMs: Long)
+
+    @Query("SELECT * FROM playlists")
+    suspend fun getAllPlaylists(): List<PlaylistEntity>
+
+    @Query("SELECT * FROM playlist_songs ORDER BY playlistId ASC, position ASC")
+    suspend fun getAllCrossRefs(): List<PlaylistSongCrossRef>
+
+    @Query("SELECT * FROM playlist_songs WHERE playlistId = :playlistId ORDER BY position ASC")
+    suspend fun getCrossRefsForPlaylist(playlistId: String): List<PlaylistSongCrossRef>
 }
 
 @Dao
@@ -131,6 +149,9 @@ interface HistoryDao {
 
     @Query("DELETE FROM play_history")
     suspend fun clearAll()
+
+    @Query("SELECT * FROM play_history ORDER BY playedAtMs ASC")
+    suspend fun getAllHistoryRaw(): List<PlayHistoryEntity>
 }
 
 @Dao
@@ -204,6 +225,9 @@ interface SubscribedArtistDao {
 
     @Query("SELECT EXISTS(SELECT 1 FROM subscribed_artists WHERE browseId = :browseId)")
     suspend fun isSubscribed(browseId: String): Boolean
+
+    @Query("SELECT * FROM subscribed_artists ORDER BY subscribedAtMs DESC")
+    suspend fun getAll(): List<SubscribedArtistEntity>
 }
 
 @Dao
@@ -219,4 +243,10 @@ interface SavedCollectionDao {
 
     @Query("SELECT browseId FROM saved_collections")
     fun observeIds(): Flow<List<String>>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM saved_collections WHERE browseId = :browseId)")
+    suspend fun isSaved(browseId: String): Boolean
+
+    @Query("SELECT * FROM saved_collections ORDER BY savedAtMs DESC")
+    suspend fun getAll(): List<SavedCollectionEntity>
 }

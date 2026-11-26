@@ -120,6 +120,24 @@ class YtMusicRepository(
         client.browseLibrary(browseId).shelves
     }
 
+    suspend fun loadLikedSongs(continuation: String? = null): Result<Pair<List<Song>, String?>> = runCatching {
+        client.browseLikedSongs(continuation)
+    }
+
+    suspend fun loadRemoteSavedAlbums(): Result<List<com.music.musica.core.model.ShelfItem.Album>> = runCatching {
+        client.browseLibrary("FEmusic_liked_albums").shelves
+            .flatMap { it.items }
+            .filterIsInstance<com.music.musica.core.model.ShelfItem.Album>()
+            .distinctBy { it.browseId }
+    }
+
+    suspend fun loadRemoteSubscribedArtists(): Result<List<com.music.musica.core.model.ShelfItem.Artist>> = runCatching {
+        client.browseLibrary("FEmusic_library_corpus_artists").shelves
+            .flatMap { it.items }
+            .filterIsInstance<com.music.musica.core.model.ShelfItem.Artist>()
+            .distinctBy { it.browseId }
+    }
+
     suspend fun loadDetail(browseId: String, params: String? = null, forceRefresh: Boolean = false): Result<DetailPage> =
         runCatching {
             val cacheKey = "$browseId:${params.orEmpty()}"
@@ -131,6 +149,11 @@ class YtMusicRepository(
                     detailCache[cacheKey] = page
                 }
             }
+        }
+
+    suspend fun loadDetailContinuation(browseId: String, continuation: String): Result<Pair<List<Song>, String?>> =
+        runCatching {
+            client.browseDetailContinuation(browseId, continuation)
         }
 
     suspend fun search(query: String, filter: SearchFilter, continuation: String? = null): Result<SearchPage> =
@@ -155,6 +178,29 @@ class YtMusicRepository(
 
     suspend fun addSongToRemotePlaylist(playlistId: String, videoId: String): Boolean =
         runCatching { client.addSongToPlaylist(playlistId, videoId) }.getOrDefault(false)
+
+    suspend fun deleteRemotePlaylist(playlistId: String): Boolean =
+        runCatching { client.deletePlaylist(playlistId) }.getOrDefault(false)
+
+    suspend fun renameRemotePlaylist(playlistId: String, title: String, description: String = ""): Boolean =
+        runCatching { client.renamePlaylist(playlistId, title, description) }.getOrDefault(false)
+
+    suspend fun removeSongFromRemotePlaylist(playlistId: String, videoId: String, setVideoId: String?): Boolean =
+        runCatching { client.removeSongFromPlaylist(playlistId, videoId, setVideoId) }.getOrDefault(false)
+
+    suspend fun moveRemotePlaylistItem(
+        playlistId: String,
+        setVideoId: String,
+        movedBeforeSetVideoId: String?,
+    ): Boolean = runCatching {
+        client.movePlaylistItem(playlistId, setVideoId, movedBeforeSetVideoId)
+    }.getOrDefault(false)
+
+    suspend fun setSubscribed(channelId: String, subscribe: Boolean): Boolean =
+        runCatching { client.setSubscribed(channelId, subscribe) }.getOrDefault(false)
+
+    suspend fun ratePlaylist(playlistId: String, like: Boolean): Boolean =
+        runCatching { client.ratePlaylist(playlistId, like) }.getOrDefault(false)
 
     fun clearCache() {
         detailCache.clear()

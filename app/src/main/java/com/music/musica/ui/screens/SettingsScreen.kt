@@ -37,6 +37,7 @@ import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.HighQuality
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Lyrics
@@ -117,6 +118,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
+    onSetSyncYtmHistory: (Boolean) -> Unit = {},
     onSetCrossfade: (Int) -> Unit,
     onSetSkipSilence: (Boolean) -> Unit,
     onSetAutoplay: (Boolean) -> Unit,
@@ -237,7 +239,7 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             // 1. Account
-            if (matches("account", "akun", "sign in", "masuk", "google", "guest", "tamu", "login")) {
+            if (matches("account", "akun", "sign in", "masuk", "google", "guest", "tamu", "login", "history", "riwayat", "sync", "sinkron", "privacy", "privasi")) {
                 item(key = "sec_account") {
                     SettingsGroup(title = stringResource(R.string.settings_section_account)) {
                         SettingsValueRow(
@@ -251,6 +253,16 @@ fun SettingsScreen(
                             destructive = isSignedIn,
                             onClick = { if (isSignedIn) confirmSignOut = true else onSignIn() },
                         )
+                        if (isSignedIn) {
+                            GroupDivider()
+                            SettingsSwitchRow(
+                                icon = Icons.Rounded.History,
+                                title = stringResource(R.string.settings_sync_ytm_history),
+                                subtitle = stringResource(R.string.settings_sync_ytm_history_desc),
+                                checked = settings.syncPlaybackHistoryToYtm,
+                                onCheckedChange = onSetSyncYtmHistory,
+                            )
+                        }
                     }
                 }
             }

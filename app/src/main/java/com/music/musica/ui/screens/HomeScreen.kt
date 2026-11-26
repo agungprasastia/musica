@@ -119,6 +119,7 @@ fun HomeScreen(
     onRefresh: () -> Unit,
     onLoadMore: () -> Unit,
     onItemClick: (ShelfItem) -> Unit,
+    onBrowseLongClick: ((ShelfItem) -> Unit)? = null,
     onSongMore: (Song) -> Unit,
     onPlayNext: (Song) -> Unit,
     onAddToQueue: (Song) -> Unit,
@@ -250,6 +251,7 @@ fun HomeScreen(
                             eyebrowFallback = heroShelf.title.ifBlank { stringResource(R.string.home_top_picks) },
                             items = heroShelf.items,
                             onItemClick = onItemClick,
+                            onBrowseLongClick = onBrowseLongClick,
                             onSongMore = onSongMore,
                         )
                     }
@@ -314,6 +316,7 @@ fun HomeScreen(
                                         downloadedIds = downloadedIds,
                                         onItemClick = onItemClick,
                                         onSongMore = onSongMore,
+                                        onBrowseLongClick = onBrowseLongClick,
                                         onPlayNext = onPlayNext,
                                         onAddToQueue = onAddToQueue,
                                         onSeeAllClick = shelf.browseId?.let { id ->
@@ -415,6 +418,7 @@ private fun TopPicksHeroShelf(
     eyebrowFallback: String,
     items: List<ShelfItem>,
     onItemClick: (ShelfItem) -> Unit,
+    onBrowseLongClick: ((ShelfItem) -> Unit)? = null,
     onSongMore: (Song) -> Unit,
 ) {
     val heroItems = remember(items) { items.take(10) }
@@ -470,10 +474,18 @@ private fun TopPicksHeroShelf(
                             .background(Color.Black)
                             .combinedClickable(
                                 onClick = { onItemClick(item) },
-                                onLongClick = (item as? ShelfItem.Track)?.let { t ->
-                                    {
-                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        onSongMore(t.song)
+                                onLongClick = when (item) {
+                                    is ShelfItem.Track -> {
+                                        {
+                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            onSongMore(item.song)
+                                        }
+                                    }
+                                    else -> onBrowseLongClick?.let { handler ->
+                                        {
+                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            handler(item)
+                                        }
                                     }
                                 },
                             ),

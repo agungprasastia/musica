@@ -89,6 +89,9 @@ class SettingsStoreTest {
         val dlUpdated = store.settings.first()
         assertEquals(AudioQuality.MAX, dlUpdated.downloadQuality)
         assertTrue(dlUpdated.wifiOnlyDownloads)
+        assertTrue(dlUpdated.syncPlaybackHistoryToYtm)
+        store.setSyncPlaybackHistoryToYtm(false)
+        assertFalse(store.settings.first().syncPlaybackHistoryToYtm)
 
         // Lower / upper bound clamping
         store.setAudioCacheLimitMb(10)

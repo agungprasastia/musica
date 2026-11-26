@@ -3,9 +3,11 @@ package com.music.musica.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +31,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Sort
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -38,16 +42,19 @@ import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -104,12 +111,15 @@ private enum class TrackSortOrder {
  * - Clean architectural Mood/Genre Category Directory header
  * - Floating circular FrostedTopBar with collapsing sticky title on scroll
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DetailScreen(
     state: UiState<DetailPage>,
     activeVideoId: String?,
     downloadedIds: Set<String>,
     subscribedArtistIds: Set<String> = emptySet(),
+    savedCollectionIds: Set<String> = emptySet(),
+    isLoadingMore: Boolean = false,
     hazeState: HazeState,
     frostedGlassEnabled: Boolean,
     fullBleedCoverArt: Boolean = false,
@@ -117,10 +127,15 @@ fun DetailScreen(
     bottomPadding: Dp,
     onBack: () -> Unit,
     onRetry: () -> Unit,
+    onLoadMoreTracks: () -> Unit = {},
     onPlayTracks: (List<Song>, Int, Boolean) -> Unit,
     onDownloadAll: (List<Song>, String?, String?) -> Unit,
     onToggleSubscribeArtist: (String, String, String?) -> Unit = { _, _, _ -> },
+    onToggleSaveCollection: (String, BrowseType, String, String?, String?) -> Unit = { _, _, _, _, _ -> },
+    onOpenArtist: (String) -> Unit = {},
+    onOpenSeeAll: (String, String?) -> Unit = { _, _ -> },
     onItemClick: (ShelfItem) -> Unit,
+    onBrowseLongClick: ((ShelfItem) -> Unit)? = null,
     onSongMore: (Song) -> Unit,
     onPlayNext: (Song) -> Unit,
     onAddToQueue: (Song) -> Unit,
@@ -141,6 +156,18 @@ fun DetailScreen(
     var sortOrder by remember(page?.browseId) { mutableStateOf(TrackSortOrder.DEFAULT) }
     var aboutExpanded by remember(page?.browseId) { mutableStateOf(false) }
     val detailHazeState = rememberHazeState()
+
+    val hasContinuation = !page?.continuation.isNullOrBlank()
+    LaunchedEffect(listState, hasContinuation, isLoadingMore) {
+        if (!hasContinuation || isLoadingMore) return@LaunchedEffect
+        snapshotFlow {
+            val layout = listState.layoutInfo
+            val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: 0
+            layout.totalItemsCount > 0 && lastVisible >= layout.totalItemsCount - 6
+        }.collect { nearEnd ->
+            if (nearEnd) onLoadMoreTracks()
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
     Box(
@@ -248,15 +275,27 @@ fun DetailScreen(
                             }
 
                             else -> {
+                                val isSaved = detail.browseId in savedCollectionIds
                                 ReleaseHeroHeader(
                                     detail = detail,
                                     palette = palette,
                                     fullBleed = fullBleedCoverArt,
+                                    isSaved = isSaved,
+                                    onArtistClick = detail.artist?.browseId?.let { id -> { onOpenArtist(id) } },
                                     onPlay = {
                                         if (detail.tracks.isNotEmpty()) onPlayTracks(detail.tracks, 0, false)
                                     },
                                     onShuffle = {
                                         if (detail.tracks.isNotEmpty()) onPlayTracks(detail.tracks, 0, true)
+                                    },
+                                    onToggleSave = {
+                                        onToggleSaveCollection(
+                                            detail.browseId,
+                                            detail.type,
+                                            detail.title,
+                                            detail.subtitle,
+                                            detail.thumbnailUrl,
+                                        )
                                     },
                                     onDownloadAll = {
                                         if (detail.tracks.isNotEmpty()) {
@@ -325,6 +364,7 @@ fun DetailScreen(
                                 item = latestRelease,
                                 palette = palette,
                                 onClick = { onItemClick(latestRelease) },
+                                onLongClick = onBrowseLongClick?.let { handler -> { handler(latestRelease) } },
                             )
                         }
                     }
@@ -392,9 +432,31 @@ fun DetailScreen(
                                 downloadedIds = downloadedIds,
                                 onItemClick = onItemClick,
                                 onSongMore = onSongMore,
+                                onBrowseLongClick = onBrowseLongClick,
                                 onPlayNext = onPlayNext,
                                 onAddToQueue = onAddToQueue,
+                                onSeeAllClick = section.browseId?.let { id ->
+                                    { onOpenSeeAll(id, section.params) }
+                                },
                             )
+                        }
+                    }
+
+                    // Bottom pagination spinner for playlists with >100 tracks
+                    if (isLoadingMore || !detail.continuation.isNullOrBlank()) {
+                        item(key = "detail_load_more") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 18.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CircularProgressIndicator(
+                                    color = palette.accent,
+                                    strokeWidth = 2.5.dp,
+                                    modifier = Modifier.size(24.dp),
+                                )
+                            }
                         }
                     }
 
@@ -664,18 +726,20 @@ private fun ArtistHeroHeader(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TopReleaseCard(
     item: ShelfItem,
     palette: com.music.musica.ui.theme.ArtworkPalette,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .glassCard(RoundedCornerShape(22.dp))
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -719,8 +783,11 @@ private fun ReleaseHeroHeader(
     detail: DetailPage,
     palette: com.music.musica.ui.theme.ArtworkPalette,
     fullBleed: Boolean,
+    isSaved: Boolean = false,
+    onArtistClick: (() -> Unit)? = null,
     onPlay: () -> Unit,
     onShuffle: () -> Unit,
+    onToggleSave: () -> Unit = {},
     onDownloadAll: () -> Unit,
 ) {
     val totalMinutes = remember(detail.tracks) {
@@ -798,6 +865,21 @@ private fun ReleaseHeroHeader(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (detail.artist != null && onArtistClick != null) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = detail.artist.name,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = palette.accent,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onArtistClick)
+                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                )
+            }
             if (metaLine.isNotBlank()) {
                 Spacer(Modifier.height(5.dp))
                 Text(
@@ -813,10 +895,10 @@ private fun ReleaseHeroHeader(
             if (detail.tracks.isNotEmpty()) {
                 Spacer(Modifier.height(18.dp))
                 val playOnBg = if (palette.onBackground.luminance() > 0.5f) Color.Black else Color.White
-                // 3-control bar: Shuffle circle | Solid Primary Play pill | Download circle
+                // 4-control bar: Shuffle circle | Solid Primary Play pill | Save circle | Download circle
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(
@@ -848,6 +930,23 @@ private fun ReleaseHeroHeader(
                         Text(
                             text = stringResource(R.string.action_play),
                             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .lightweightGlass(CircleShape)
+                            .clickable(onClick = onToggleSave),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = if (isSaved) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
+                            contentDescription = stringResource(
+                                if (isSaved) R.string.menu_remove_from_library else R.string.menu_save_to_library,
+                            ),
+                            tint = if (isSaved) palette.accent else palette.onBackground,
+                            modifier = Modifier.size(20.dp),
                         )
                     }
 

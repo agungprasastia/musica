@@ -91,19 +91,36 @@
     <!-- Song Actions Menu -->
     <string name="menu_play_next">Play Next</string>
     <string name="menu_add_to_queue">Add to Queue</string>
+    <string name="menu_start_radio">Start Radio</string>
     <string name="menu_like">Add to Liked Songs</string>
     <string name="menu_unlike">Remove from Liked Songs</string>
+    <string name="menu_dislike">Dislike</string>
+    <string name="menu_undislike">Remove Dislike</string>
     <string name="menu_add_playlist">Add to Playlist</string>
     <string name="menu_download">Download Offline</string>
     <string name="menu_remove_download">Remove Download</string>
+    <string name="menu_download_all">Download All</string>
+    <string name="menu_save_to_library">Save to Library</string>
+    <string name="menu_remove_from_library">Remove from Library</string>
+    <string name="menu_subscribe">Subscribe</string>
+    <string name="menu_subscribed">Subscribed</string>
+    <string name="menu_pin_playlist">Pin Playlist</string>
+    <string name="menu_unpin_playlist">Unpin Playlist</string>
+    <string name="menu_rename_playlist">Rename Playlist</string>
+    <string name="menu_delete_playlist">Delete Playlist</string>
+    <string name="menu_delete_playlist_confirm">Delete \"%1$s\"? This cannot be undone.</string>
     <string name="menu_go_to_artist">Go to Artist</string>
     <string name="menu_go_to_album">Go to Album</string>
     <string name="menu_share">Share</string>
     <string name="menu_stats_for_nerds">Stats for Nerds</string>
     <string name="toast_added_play_next">Playing next</string>
     <string name="toast_added_queue">Added to queue</string>
+    <string name="toast_radio_started">Starting radio…</string>
     <string name="toast_download_started">Download started</string>
     <string name="toast_added_playlist">Added to %1$s</string>
+    <string name="toast_saved_library">Saved to Library</string>
+    <string name="toast_removed_library">Removed from Library</string>
+    <string name="toast_playlist_deleted">Playlist deleted</string>
 
     <!-- Player & Now Playing -->
     <string name="player_now_playing">Now Playing</string>
@@ -271,11 +288,14 @@
     <string name="settings_lyrics_preview_desc">Show live active lyric line above scrubber</string>
     <string name="settings_cache_limit">Audio Cache Limit</string>
     <string name="settings_section_data">Your Data</string>
-    <string name="settings_export_backup">Export Settings Backup</string>
-    <string name="settings_export_backup_desc">Save preferences to a local JSON file</string>
-    <string name="settings_import_backup">Import Settings Backup</string>
-    <string name="settings_import_backup_desc">Restore preferences from a JSON backup</string>
+    <string name="settings_sync_ytm_history">Sync Play History to YouTube Music</string>
+    <string name="settings_sync_ytm_history_desc">Report played songs so your YouTube Music recommendations stay personalized</string>
+    <string name="settings_export_backup">Export Full Backup</string>
+    <string name="settings_export_backup_desc">Save settings, playlists, likes, and listening history to JSON</string>
+    <string name="settings_import_backup">Import Backup</string>
+    <string name="settings_import_backup_desc">Restore settings and library data from a JSON backup</string>
     <string name="settings_backup_saved">Backup exported</string>
     <string name="settings_backup_restored">Backup restored</string>
     <string name="settings_backup_failed">Could not process backup file</string>
+    <string name="library_ytm_playlist_badge">YouTube Music</string>
 </resources>
