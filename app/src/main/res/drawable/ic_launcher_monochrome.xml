@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Musica Kinetic Wave Monochrome Mark for Android 13+ Themed Icons -->
+    <path
+        android:pathData="M36.5,68.9 L43.8,48.9 M49.8,70.9 L61.4,39.1 M64.5,68.9 L71.8,48.9"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="7.8" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M48.1,33.2 a3.9,3.9 0 1,0 0,7.8 a3.9,3.9 0 1,0 0,-7.8 Z" />
+</vector>
