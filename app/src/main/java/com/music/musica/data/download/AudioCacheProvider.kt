@@ -10,6 +10,7 @@ import androidx.media3.datasource.cache.NoOpCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import com.music.musica.core.network.HttpClients
+import com.music.musica.data.stream.ChunkedDataSource
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
@@ -48,6 +49,14 @@ class AudioCacheProvider(context: Context) {
     val upstreamHttpFactory: OkHttpDataSource.Factory by lazy {
         OkHttpDataSource.Factory(HttpClients.okHttp)
             .setUserAgent(HTTP_USER_AGENT)
+    }
+
+    /**
+     * Bounded-range HTTP DataSource factory wrapping [upstreamHttpFactory] to prevent
+     * googlevideo progressive stream throttling while passing non-`clen` URLs through untouched.
+     */
+    val chunkedHttpFactory: DataSource.Factory by lazy {
+        ChunkedDataSource.Factory(upstreamHttpFactory)
     }
 
     fun buildPlaybackDataSourceFactory(upstream: DataSource.Factory): DataSource.Factory {

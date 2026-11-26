@@ -46,6 +46,24 @@ class QueueManager(
         }
     }
 
+    /**
+     * Restores a previously persisted queue snapshot verbatim (preserving existing shuffle order,
+     * active index, and repeat mode without re-shuffling).
+     */
+    fun restore(
+        songs: List<Song>,
+        currentIndex: Int,
+        shuffleEnabled: Boolean,
+        repeatMode: RepeatMode,
+    ) {
+        _queue.clear()
+        _queue.addAll(songs)
+        unshuffledOrder = songs.toList()
+        this.shuffleEnabled = shuffleEnabled
+        this.repeatMode = repeatMode
+        this.currentIndex = if (songs.isEmpty()) -1 else currentIndex.coerceIn(0, songs.lastIndex)
+    }
+
     fun playNext(song: Song) {
         if (_queue.isEmpty()) {
             setQueue(listOf(song), 0)

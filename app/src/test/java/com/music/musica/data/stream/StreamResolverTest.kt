@@ -110,4 +110,37 @@ class StreamResolverTest {
 
         assertTrue(resolver.resolve("missing").isFailure)
     }
+
+    @Test
+    fun resolve_skipsBlockingProbeOnFirstResolveWhenDisabledAndProbesOnForceRefresh() = runTest {
+        var probeCalls = 0
+        val primary = FakeSource("ITX") { id, _ ->
+            ResolvedStream(videoId = id, url = "https://primary/dead", sourceClient = "ITX")
+        }
+        val fallback = FakeSource("NewPipe") { id, _ ->
+            ResolvedStream(videoId = id, url = "https://fallback/alive", sourceClient = "NewPipe")
+        }
+        val prober = object : StreamProber {
+            override suspend fun isPlayable(stream: ResolvedStream): Boolean {
+                probeCalls++
+                return stream.url.contains("alive")
+            }
+        }
+        val resolver = StreamResolver(
+            primary = primary,
+            fallback = fallback,
+            prober = prober,
+            probeOnFirstResolve = false,
+        )
+
+        // First play skips HTTP probe for fastest startup
+        val first = resolver.resolve("vidFast").getOrThrow()
+        assertEquals("https://primary/dead", first.url)
+        assertEquals(0, probeCalls)
+
+        // Retry with forceRefresh probes primary, rejects dead URL, and falls back to NewPipe
+        val retried = resolver.resolve("vidFast", forceRefresh = true).getOrThrow()
+        assertEquals("https://fallback/alive", retried.url)
+        assertEquals(2, probeCalls)
+    }
 }

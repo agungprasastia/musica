@@ -1,3 +1,7 @@
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -69,6 +73,60 @@ ksp {
     arg("room.generateKotlin", "true")
 }
 
+/**
+ * Strips org.schabi.newpipe.extractor.utils.Utils.class (and nested siblings) from the upstream
+ * NewPipeExtractor jar so Musica's API-1-safe vendored Utils.java is the single definition
+ * reaching D8/R8 dex merging in release builds. Configuration-cache safe and incremental.
+ */
+abstract class StripNewPipeUtilsJarTask : DefaultTask() {
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val inputJars: ConfigurableFileCollection
+
+    @get:OutputFile
+    abstract val outputJar: RegularFileProperty
+
+    @TaskAction
+    fun strip() {
+        val out = outputJar.get().asFile
+        out.parentFile?.mkdirs()
+        val seenEntries = HashSet<String>()
+        ZipOutputStream(out.outputStream().buffered()).use { zos ->
+            inputJars.files.sortedBy { it.name }.forEach { jarFile ->
+                ZipInputStream(jarFile.inputStream().buffered()).use { zis ->
+                    var entry = zis.nextEntry
+                    while (entry != null) {
+                        val name = entry.name
+                        val isExcluded = name == "org/schabi/newpipe/extractor/utils/Utils.class" ||
+                            (name.startsWith("org/schabi/newpipe/extractor/utils/Utils$") && name.endsWith(".class"))
+                        if (!isExcluded && seenEntries.add(name)) {
+                            val copy = ZipEntry(name)
+                            if (entry.time != -1L) copy.time = entry.time
+                            zos.putNextEntry(copy)
+                            if (!entry.isDirectory) {
+                                zis.copyTo(zos)
+                            }
+                            zos.closeEntry()
+                        }
+                        zis.closeEntry()
+                        entry = zis.nextEntry
+                    }
+                }
+            }
+        }
+    }
+}
+
+val newPipeExtractorRaw: Configuration by configurations.creating {
+    isTransitive = false
+    isCanBeConsumed = false
+}
+
+val stripNewPipeExtractorUtils = tasks.register<StripNewPipeUtilsJarTask>("stripNewPipeExtractorUtils") {
+    inputJars.from(newPipeExtractorRaw)
+    outputJar.set(layout.buildDirectory.file("stripped-libs/NewPipeExtractor-v0.26.3-noutils.jar"))
+}
+
 dependencies {
     // Compose & AndroidX
     implementation(platform(libs.androidx.compose.bom))
@@ -111,8 +169,14 @@ dependencies {
     implementation(libs.jsoup)
 
     // YouTube Extraction
+    newPipeExtractorRaw(libs.newpipe.extractor)
     implementation(libs.innertubex.android)
-    implementation(libs.newpipe.extractor)
+    implementation(files(stripNewPipeExtractorUtils.flatMap { it.outputJar }))
+    implementation(libs.newpipe.nanojson)
+    implementation(libs.jsr305)
+    implementation(libs.protobuf.javalite)
+    implementation(libs.rhino)
+    implementation(libs.rhino.engine)
     implementation(libs.quickjs.android)
 
     // Images & Frosted Glass

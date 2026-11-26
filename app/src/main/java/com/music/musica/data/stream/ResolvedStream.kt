@@ -53,9 +53,12 @@ class OkHttpStreamProber(
 }
 
 /**
- * Resolves a YouTube videoId to a verified playable audio stream URL.
- * Order: TTL cache (keyed by videoId + bitrate ceiling) -> primary source -> fallback source,
- * probing each candidate before returning or caching.
+ * Resolves a YouTube videoId to a playable audio stream URL.
+ * Order: TTL cache (keyed by videoId + bitrate ceiling) -> primary source -> fallback source.
+ *
+ * When [probeOnFirstResolve] is false, initial resolution skips the extra blocking HTTP range
+ * probe so ExoPlayer starts immediately (cutting 200-500ms off time-to-first-audio), while
+ * retry (`forceRefresh = true`) probes candidates to reject dead/403 URLs and trigger fallback.
  */
 class StreamResolver(
     private val primary: StreamSource,
@@ -64,14 +67,19 @@ class StreamResolver(
     private val qualityKbpsProvider: () -> Int = { Int.MAX_VALUE },
     private val clockMs: () -> Long = { System.currentTimeMillis() },
     private val cacheTtlMs: Long = DEFAULT_CACHE_TTL_MS,
+    private val probeOnFirstResolve: Boolean = true,
 ) {
     private data class CacheKey(val videoId: String, val maxKbps: Int)
     private data class CacheEntry(val stream: ResolvedStream, val expiresAtMs: Long)
 
     private val cache = ConcurrentHashMap<CacheKey, CacheEntry>()
 
-    suspend fun resolve(videoId: String, forceRefresh: Boolean = false): Result<ResolvedStream> {
-        val ceilingKbps = qualityKbpsProvider()
+    suspend fun resolve(
+        videoId: String,
+        forceRefresh: Boolean = false,
+        overrideMaxKbps: Int? = null,
+    ): Result<ResolvedStream> {
+        val ceilingKbps = overrideMaxKbps ?: qualityKbpsProvider()
         val key = CacheKey(videoId, ceilingKbps)
         val now = clockMs()
 
@@ -83,6 +91,7 @@ class StreamResolver(
             invalidate(videoId)
         }
 
+        val shouldProbe = forceRefresh || probeOnFirstResolve
         val candidates = listOfNotNull(primary, fallback)
         var lastError: Throwable? = null
 
@@ -95,7 +104,7 @@ class StreamResolver(
                 .getOrNull()
                 ?: continue
 
-            if (prober.isPlayable(resolved)) {
+            if (!shouldProbe || prober.isPlayable(resolved)) {
                 val stamped = resolved.copy(resolvedAtMs = now)
                 cache[key] = CacheEntry(stamped, now + cacheTtlMs)
                 return Result.success(stamped)

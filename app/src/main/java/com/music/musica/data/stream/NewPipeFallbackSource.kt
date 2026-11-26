@@ -1,7 +1,5 @@
 package com.music.musica.data.stream
 
-import android.os.Build
-import android.util.Log
 import com.music.musica.core.network.HttpClients
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -16,8 +14,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
 
 /**
  * Fallback YouTube stream source using NewPipeExtractor.
- * Guarded on API < 33 because NewPipeExtractor v0.26.3 references URLEncoder.encode(String, Charset)
- * introduced in Android 13 (API 33), avoiding NoSuchMethodError on older devices.
+ * Supported on Android 8+ (API 26+) via the vendored API-1-safe
+ * `org.schabi.newpipe.extractor.utils.Utils` URL encoding/decoding patch.
  */
 class NewPipeFallbackSource(
     private val okHttp: OkHttpClient = HttpClients.okHttp,
@@ -26,11 +24,6 @@ class NewPipeFallbackSource(
     override val name: String = "NewPipe"
 
     override suspend fun resolve(videoId: String, maxKbps: Int): ResolvedStream? = withContext(Dispatchers.IO) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            Log.d(TAG, "Skipping NewPipe fallback on API ${Build.VERSION.SDK_INT} (< 33)")
-            return@withContext null
-        }
-
         ensureInitialized(okHttp)
 
         val url = "https://www.youtube.com/watch?v=$videoId"
@@ -96,7 +89,6 @@ class NewPipeFallbackSource(
     }
 
     companion object {
-        private const val TAG = "MusicaNewPipe"
         @Volatile
         private var initialized = false
         private const val USER_AGENT =
