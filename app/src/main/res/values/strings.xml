@@ -200,8 +200,6 @@
     <string name="replay_pass_top_song_kicker">Top song</string>
     <string name="replay_pass_top_artist_kicker">Top artist</string>
     <string name="replay_pass_top_album_kicker">Top album</string>
-    <string name="replay_pass_peak_hour_kicker">Peak rhythm</string>
-    <string name="replay_pass_discovery_kicker">Music explorer</string>
     <string name="replay_pass_member_since">Member since</string>
     <string name="replay_pass_default_holder">Musica Listener</string>
     <string name="replay_pass_all_time_short">All time</string>
@@ -220,22 +218,6 @@
     <plurals name="replay_pass_active_days">
         <item quantity="one">%1$d active day</item>
         <item quantity="other">%1$d active days</item>
-    </plurals>
-    <plurals name="replay_pass_songs_explored">
-        <item quantity="one">%1$d Song</item>
-        <item quantity="other">%1$d Songs</item>
-    </plurals>
-    <plurals name="replay_pass_artists_short">
-        <item quantity="one">%1$d artist</item>
-        <item quantity="other">%1$d artists</item>
-    </plurals>
-    <plurals name="replay_pass_albums_short">
-        <item quantity="one">%1$d album</item>
-        <item quantity="other">%1$d albums</item>
-    </plurals>
-    <plurals name="replay_pass_artists_only_short">
-        <item quantity="one">%1$d unique artist</item>
-        <item quantity="other">%1$d unique artists</item>
     </plurals>
     <string name="replay_habits_title">Listening Habits</string>
     <string name="replay_habits_songs">Songs</string>

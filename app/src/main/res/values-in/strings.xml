@@ -200,8 +200,6 @@
     <string name="replay_pass_top_song_kicker">Lagu teratas</string>
     <string name="replay_pass_top_artist_kicker">Artis teratas</string>
     <string name="replay_pass_top_album_kicker">Album teratas</string>
-    <string name="replay_pass_peak_hour_kicker">Waktu favorit</string>
-    <string name="replay_pass_discovery_kicker">Jelajah musik</string>
     <string name="replay_pass_member_since">Anggota sejak</string>
     <string name="replay_pass_default_holder">Pendengar Musica</string>
     <string name="replay_pass_all_time_short">Semua waktu</string>
@@ -218,18 +216,6 @@
     </plurals>
     <plurals name="replay_pass_active_days">
         <item quantity="other">%1$d hari aktif</item>
-    </plurals>
-    <plurals name="replay_pass_songs_explored">
-        <item quantity="other">%1$d Lagu</item>
-    </plurals>
-    <plurals name="replay_pass_artists_short">
-        <item quantity="other">%1$d artis</item>
-    </plurals>
-    <plurals name="replay_pass_albums_short">
-        <item quantity="other">%1$d album</item>
-    </plurals>
-    <plurals name="replay_pass_artists_only_short">
-        <item quantity="other">%1$d artis unik</item>
     </plurals>
     <string name="replay_habits_title">Kebiasaan Mendengarkan</string>
     <string name="replay_habits_songs">Lagu Unik</string>
