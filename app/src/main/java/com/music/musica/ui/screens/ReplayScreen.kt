@@ -84,8 +84,6 @@ fun ReplayScreen(
             ReplayPassSection.TOP_SONG -> if (songsSpan > 0) 3 else 0
             ReplayPassSection.TOP_ARTIST -> if (artistsSpan > 0) 3 + songsSpan else 0
             ReplayPassSection.TOP_ALBUM -> if (albumsSpan > 0) 3 + songsSpan + artistsSpan else 0
-            ReplayPassSection.PEAK_HOUR,
-            ReplayPassSection.DISCOVERY -> 3 + songsSpan + artistsSpan + albumsSpan
         }
         if (targetIndex > 0) {
             listState.scrollToItem(targetIndex)

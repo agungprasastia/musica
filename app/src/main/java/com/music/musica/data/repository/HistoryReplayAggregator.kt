@@ -9,8 +9,6 @@ enum class ReplayPassSection {
     TOP_SONG,
     TOP_ARTIST,
     TOP_ALBUM,
-    PEAK_HOUR,
-    DISCOVERY,
 }
 
 data class PlayEvent(
