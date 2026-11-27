@@ -116,6 +116,10 @@ class MusicaPlaybackService : MediaSessionService() {
     // Accurate listening-time tracker (counts only actual playing time, not paused intervals)
     private var accumulatedPlayMs: Long = 0L
     private var playSegmentStartMs: Long = 0L
+    private var nextHistorySessionToken: Long = 1L
+    private var activeHistorySessionToken: Long = 0L
+    private var activeHistorySong: Song? = null
+    private var lastHistoryCheckpointMs: Long = 0L
 
     // Bounded per-track retry & consecutive bad-track auto-skip guards
     private var lastRetriedVideoId: String? = null
@@ -201,6 +205,7 @@ class MusicaPlaybackService : MediaSessionService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        checkpointActiveHistorySession()
         persistLastPlayedNow()
         if (!activePlayer.playWhenReady || activePlayer.mediaItemCount == 0) {
             stopSelf()
@@ -441,6 +446,9 @@ class MusicaPlaybackService : MediaSessionService() {
 
     fun removeQueueItem(index: Int) {
         val removingCurrent = index == queueManager.currentIndex
+        if (removingCurrent) {
+            recordCompletedListeningSession()
+        }
         cancelCrossfade()
         queueManager.removeAt(index)
         if (removingCurrent) {
@@ -795,10 +803,12 @@ class MusicaPlaybackService : MediaSessionService() {
                 consecutiveAutoSkips = 0
                 playSegmentStartMs = System.currentTimeMillis()
                 queueManager.currentSong?.let { song ->
+                    ensureActiveHistorySessionStarted(song)
                     container.playbackTracker.onPlaying(song.videoId)
                 }
             } else {
                 flushPlaySegment()
+                checkpointActiveHistorySession()
                 if (crossfadeStateMachine.status.phase == CrossfadePhase.FADING &&
                     activePlayer.playbackState != Player.STATE_ENDED
                 ) {
@@ -822,7 +832,10 @@ class MusicaPlaybackService : MediaSessionService() {
                     accumulatedPlayMs = 0L
                     playSegmentStartMs = if (activePlayer.isPlaying) System.currentTimeMillis() else 0L
                     if (activePlayer.isPlaying) {
-                        queueManager.currentSong?.let { container.playbackTracker.onPlaying(it.videoId) }
+                        queueManager.currentSong?.let { song ->
+                            ensureActiveHistorySessionStarted(song)
+                            container.playbackTracker.onPlaying(song.videoId)
+                        }
                     }
                     syncUiState()
                 }
@@ -859,6 +872,7 @@ class MusicaPlaybackService : MediaSessionService() {
                     queueManager.currentSong?.let { song ->
                         updateNerdStatsBase(song.videoId)
                         if (activePlayer.isPlaying) {
+                            ensureActiveHistorySessionStarted(song)
                             container.playbackTracker.onPlaying(song.videoId)
                         }
                     }
@@ -1000,6 +1014,9 @@ class MusicaPlaybackService : MediaSessionService() {
         if (resetRetry) {
             accumulatedPlayMs = 0L
             playSegmentStartMs = 0L
+            activeHistorySessionToken = 0L
+            activeHistorySong = null
+            lastHistoryCheckpointMs = 0L
             lastRetriedVideoId = null
             retryCountForCurrent = 0
         }
@@ -1152,6 +1169,10 @@ class MusicaPlaybackService : MediaSessionService() {
                         maybeTriggerCrossfade(position, duration)
                         if (activePlayer.isPlaying) {
                             queueManager.currentSong?.let { song ->
+                                ensureActiveHistorySessionStarted(song)
+                                if (currentSessionListenedMs() - lastHistoryCheckpointMs >= HISTORY_CHECKPOINT_INTERVAL_MS) {
+                                    checkpointActiveHistorySession()
+                                }
                                 container.playbackTracker.onProgress(song.videoId, position / 1_000L)
                             }
                         }
@@ -1274,6 +1295,7 @@ class MusicaPlaybackService : MediaSessionService() {
         queueManager.currentSong?.let { song ->
             updateNerdStatsBase(song.videoId)
             if (activePlayer.isPlaying) {
+                ensureActiveHistorySessionStarted(song)
                 container.playbackTracker.onPlaying(song.videoId)
             }
         }
@@ -1375,16 +1397,51 @@ class MusicaPlaybackService : MediaSessionService() {
         }
     }
 
+    private fun currentSessionListenedMs(): Long {
+        val liveSegment = if (playSegmentStartMs > 0L) {
+            (System.currentTimeMillis() - playSegmentStartMs).coerceAtLeast(0L)
+        } else {
+            0L
+        }
+        return accumulatedPlayMs + liveSegment
+    }
+
+    private fun ensureActiveHistorySessionStarted(song: Song) {
+        if (activeHistorySessionToken != 0L && activeHistorySong?.videoId == song.videoId) return
+        val token = nextHistorySessionToken++
+        activeHistorySessionToken = token
+        activeHistorySong = song
+        lastHistoryCheckpointMs = 0L
+        container.onTrackSessionStarted(token, song)
+    }
+
+    private fun checkpointActiveHistorySession() {
+        val token = activeHistorySessionToken
+        val song = activeHistorySong ?: queueManager.currentSong ?: return
+        if (token == 0L) return
+        val totalMs = currentSessionListenedMs()
+        if (totalMs <= lastHistoryCheckpointMs) return
+        lastHistoryCheckpointMs = totalMs
+        container.onTrackSessionProgress(token, song, totalMs, finalize = false)
+    }
+
     private fun recordCompletedListeningSession() {
         flushPlaySegment()
-        val song = queueManager.currentSong ?: return
+        val song = activeHistorySong ?: queueManager.currentSong ?: return
         val listenedMs = accumulatedPlayMs
+        val token = activeHistorySessionToken
         accumulatedPlayMs = 0L
+        activeHistorySessionToken = 0L
+        activeHistorySong = null
+        lastHistoryCheckpointMs = 0L
         container.playbackTracker.onTrackEnded(
             (activePlayer.currentPosition.takeIf { it > 0L } ?: listenedMs) / 1_000L,
         )
-        if (listenedMs < 5_000L) return
-        container.onTrackPlayed(song, listenedMs)
+        if (token != 0L) {
+            container.onTrackSessionProgress(token, song, listenedMs, finalize = true)
+        } else if (listenedMs >= 5_000L) {
+            container.onTrackPlayed(song, listenedMs)
+        }
     }
 
     private fun updateNerdStatsBase(videoId: String) {
@@ -1473,6 +1530,7 @@ class MusicaPlaybackService : MediaSessionService() {
         private const val UPCOMING_TIMELINE_COUNT = 25
         private const val TIMELINE_TOP_UP_THRESHOLD = 5
         private const val MAX_PAST_TIMELINE_ITEMS = 3
+        private const val HISTORY_CHECKPOINT_INTERVAL_MS = 5_000L
         const val MUSICA_SCHEME = "musica"
 
         @Volatile

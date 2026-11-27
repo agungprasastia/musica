@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -77,11 +78,14 @@ fun ReplayScreen(
         if (hasLanded || summary.totalTracksPlayed == 0) return@LaunchedEffect
         val songsSpan = if (summary.topSongs.isNotEmpty()) summary.topSongs.size + 1 else 0
         val artistsSpan = if (summary.topArtists.isNotEmpty()) summary.topArtists.size + 1 else 0
+        val albumsSpan = if (summary.topAlbums.isNotEmpty()) summary.topAlbums.size + 1 else 0
         val targetIndex = when (landingSection) {
             ReplayPassSection.MINUTES -> 0
             ReplayPassSection.TOP_SONG -> if (songsSpan > 0) 3 else 0
             ReplayPassSection.TOP_ARTIST -> if (artistsSpan > 0) 3 + songsSpan else 0
-            ReplayPassSection.TOP_ALBUM -> if (summary.topAlbums.isNotEmpty()) 3 + songsSpan + artistsSpan else 0
+            ReplayPassSection.TOP_ALBUM -> if (albumsSpan > 0) 3 + songsSpan + artistsSpan else 0
+            ReplayPassSection.PEAK_HOUR,
+            ReplayPassSection.DISCOVERY -> 3 + songsSpan + artistsSpan + albumsSpan
         }
         if (targetIndex > 0) {
             listState.scrollToItem(targetIndex)
@@ -310,6 +314,68 @@ fun ReplayScreen(
                             style = MaterialTheme.typography.labelMedium,
                             color = Color.White.copy(alpha = 0.80f),
                         )
+                    }
+                }
+            }
+
+            if (summary.distinctSongs > 0) {
+                item(key = "replay_habits_hdr") {
+                    Text(
+                        text = stringResource(R.string.replay_habits_title),
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = Color.White,
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 10.dp),
+                    )
+                }
+                item(key = "replay_habits_cards") {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            StatGlassCard(
+                                value = summary.distinctSongs.toString(),
+                                label = stringResource(R.string.replay_habits_songs),
+                                modifier = Modifier.weight(1f),
+                            )
+                            StatGlassCard(
+                                value = summary.distinctArtists.toString(),
+                                label = stringResource(R.string.replay_habits_artists),
+                                modifier = Modifier.weight(1f),
+                            )
+                            StatGlassCard(
+                                value = summary.distinctAlbums.toString(),
+                                label = stringResource(R.string.replay_habits_albums),
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        summary.peakHour?.let { hour ->
+                            val timeBucket = when (hour) {
+                                in 5..10 -> stringResource(R.string.replay_pass_time_morning)
+                                in 11..14 -> stringResource(R.string.replay_pass_time_midday)
+                                in 15..18 -> stringResource(R.string.replay_pass_time_evening)
+                                else -> stringResource(R.string.replay_pass_time_night)
+                            }
+                            val hourStr = String.format(java.util.Locale.ROOT, "%02d:00", hour)
+                            val daysCount = summary.activeDaysCount.coerceAtLeast(1)
+                            val daysLabel = pluralStringResource(R.plurals.replay_pass_active_days, daysCount, daysCount)
+                            Text(
+                                text = stringResource(
+                                    R.string.replay_habits_peak_note,
+                                    hourStr,
+                                    timeBucket,
+                                    daysLabel,
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.78f),
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                            )
+                        }
                     }
                 }
             }

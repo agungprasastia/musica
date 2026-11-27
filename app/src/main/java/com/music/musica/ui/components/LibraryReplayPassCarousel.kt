@@ -34,6 +34,12 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.NightsStay
+import androidx.compose.material.icons.rounded.WbSunny
+import androidx.compose.material.icons.rounded.WbTwilight
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,8 +60,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLocale
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
@@ -128,6 +136,41 @@ private val TopAlbumFallbackPalette = listOf(
     Color(0xFF11182E),
 )
 
+private val PeakMorningPalette = listOf(
+    Color(0xFFD97706),
+    Color(0xFFE11D48),
+    Color(0xFFF59E0B),
+    Color(0xFF2B1218),
+)
+
+private val PeakMiddayPalette = listOf(
+    Color(0xFF0284C7),
+    Color(0xFF0D9488),
+    Color(0xFF2563EB),
+    Color(0xFF0C1E33),
+)
+
+private val PeakEveningPalette = listOf(
+    Color(0xFFDB2777),
+    Color(0xFF7C3AED),
+    Color(0xFFEA580C),
+    Color(0xFF1E1033),
+)
+
+private val PeakNightPalette = listOf(
+    Color(0xFF312E81),
+    Color(0xFF6D28D9),
+    Color(0xFF0F766E),
+    Color(0xFF090D24),
+)
+
+private val DiscoveryFallbackPalette = listOf(
+    Color(0xFF059669),
+    Color(0xFF0891B2),
+    Color(0xFF4F46E5),
+    Color(0xFF0A2422),
+)
+
 private val passPaletteCache = ConcurrentHashMap<String, List<Color>>()
 
 @Immutable
@@ -137,6 +180,7 @@ internal data class ListeningPassCardModel(
     val value: String,
     val detail: String,
     val artworkUrl: String?,
+    val badgeIcon: ImageVector? = null,
     val isCircularArt: Boolean,
     val fallbackPalette: List<Color>,
     val hueShiftDegrees: Float,
@@ -145,11 +189,13 @@ internal data class ListeningPassCardModel(
 )
 
 /**
- * Horizontal snapping wallet of ISO 1.586:1 Listening Experience pass cards for LibraryScreen:
+ * Horizontal snapping wallet of up to 6 ISO 1.586:1 Listening Experience pass cards for LibraryScreen:
  * 1. Minutes Listened (signature Musica crimson-plum obsidian pass)
  * 2. Top Song (artwork-driven multi-swatch mesh + framed cover medallion)
  * 3. Top Artist (artwork-driven multi-swatch mesh + circular artist medallion)
  * 4. Top Album (artwork-driven multi-swatch mesh + framed album medallion)
+ * 5. Peak Rhythm (time-of-day celestial mesh + active listening days & peak hour)
+ * 6. Music Explorer (emerald-aurora holographic mesh + unique songs, artists & albums)
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -266,16 +312,22 @@ private fun rememberPassCards(summary: ReplaySummary): List<ListeningPassCardMod
     val topSongKicker = stringResource(R.string.replay_pass_top_song_kicker)
     val topArtistKicker = stringResource(R.string.replay_pass_top_artist_kicker)
     val topAlbumKicker = stringResource(R.string.replay_pass_top_album_kicker)
+    val peakHourKicker = stringResource(R.string.replay_pass_peak_hour_kicker)
+    val discoveryKicker = stringResource(R.string.replay_pass_discovery_kicker)
     val allTimeLabel = stringResource(R.string.replay_pass_all_time_short)
     val emptyDetail = stringResource(R.string.replay_pass_empty_detail)
 
     val totalMinutes = summary.totalListenedMs / 60_000L
-    val formattedMinutes = remember(totalMinutes, locale) {
-        NumberFormat.getIntegerInstance(locale).format(totalMinutes)
+    val formattedMinutes = remember(totalMinutes, summary.totalTracksPlayed, locale) {
+        if (summary.totalTracksPlayed > 0 && totalMinutes == 0L) {
+            "<1"
+        } else {
+            NumberFormat.getIntegerInstance(locale).format(totalMinutes)
+        }
     }
 
     val minutesDetail = if (summary.totalTracksPlayed > 0) {
-        val playsLabel = stringResource(R.string.replay_pass_plays_short, summary.totalTracksPlayed)
+        val playsLabel = pluralStringResource(R.plurals.replay_pass_plays_short, summary.totalTracksPlayed, summary.totalTracksPlayed)
         "$playsLabel · $allTimeLabel"
     } else {
         emptyDetail
@@ -283,23 +335,58 @@ private fun rememberPassCards(summary: ReplaySummary): List<ListeningPassCardMod
 
     val topSong = summary.topSongs.firstOrNull()
     val topSongDetail = topSong?.let { ranked ->
-        val playsLabel = stringResource(R.string.replay_pass_plays_short, ranked.playCount)
+        val playsLabel = pluralStringResource(R.plurals.replay_pass_plays_short, ranked.playCount, ranked.playCount)
         "${ranked.song.artistText} · $playsLabel"
     }
 
     val topArtist = summary.topArtists.firstOrNull()
     val topArtistDetail = topArtist?.let { artist ->
         val durationLabel = formatCompactListeningDuration(artist.totalListenedMs)
-        val playsLabel = stringResource(R.string.replay_pass_plays_short, artist.playCount)
+        val playsLabel = pluralStringResource(R.plurals.replay_pass_plays_short, artist.playCount, artist.playCount)
         "$durationLabel · $playsLabel"
     }
 
     val topAlbum = summary.topAlbums.firstOrNull()
     val topAlbumDetail = topAlbum?.let { album ->
         val durationLabel = formatCompactListeningDuration(album.totalListenedMs)
-        val playsLabel = stringResource(R.string.replay_pass_plays_short, album.playCount)
+        val playsLabel = pluralStringResource(R.plurals.replay_pass_plays_short, album.playCount, album.playCount)
         val lead = album.artistName?.takeIf { it.isNotBlank() } ?: durationLabel
         "$lead · $playsLabel"
+    }
+
+    val peakHour = summary.peakHour
+    val peakHourTimeLabel = peakHour?.let { hour ->
+        when (hour) {
+            in 5..10 -> stringResource(R.string.replay_pass_time_morning)
+            in 11..14 -> stringResource(R.string.replay_pass_time_midday)
+            in 15..18 -> stringResource(R.string.replay_pass_time_evening)
+            else -> stringResource(R.string.replay_pass_time_night)
+        }
+    }
+    val peakHourDetail = if (peakHour != null && peakHourTimeLabel != null) {
+        val daysCount = summary.activeDaysCount.coerceAtLeast(1)
+        val daysText = pluralStringResource(R.plurals.replay_pass_active_days, daysCount, daysCount)
+        "$peakHourTimeLabel · $daysText"
+    } else {
+        null
+    }
+
+    val discoveryValue = if (summary.distinctSongs > 0) {
+        pluralStringResource(R.plurals.replay_pass_songs_explored, summary.distinctSongs, summary.distinctSongs)
+    } else {
+        null
+    }
+    val discoveryDetail = if (summary.distinctSongs > 0) {
+        val artistCount = summary.distinctArtists.coerceAtLeast(1)
+        if (summary.distinctAlbums > 0) {
+            val artistsText = pluralStringResource(R.plurals.replay_pass_artists_short, artistCount, artistCount)
+            val albumsText = pluralStringResource(R.plurals.replay_pass_albums_short, summary.distinctAlbums, summary.distinctAlbums)
+            "$artistsText · $albumsText"
+        } else {
+            pluralStringResource(R.plurals.replay_pass_artists_only_short, artistCount, artistCount)
+        }
+    } else {
+        null
     }
 
     return remember(
@@ -308,11 +395,16 @@ private fun rememberPassCards(summary: ReplaySummary): List<ListeningPassCardMod
         topSongKicker,
         topArtistKicker,
         topAlbumKicker,
+        peakHourKicker,
+        discoveryKicker,
         formattedMinutes,
         minutesDetail,
         topSongDetail,
         topArtistDetail,
         topAlbumDetail,
+        peakHourDetail,
+        discoveryValue,
+        discoveryDetail,
     ) {
         buildList {
             add(
@@ -382,6 +474,46 @@ private fun rememberPassCards(summary: ReplaySummary): List<ListeningPassCardMod
                         fallbackPalette = TopAlbumFallbackPalette,
                         hueShiftDegrees = shift,
                         meshPhase = 4.25f,
+                        isNumericHero = false,
+                    ),
+                )
+            }
+            if (peakHour != null && peakHourDetail != null) {
+                val (peakPalette, peakIcon) = when (peakHour) {
+                    in 5..10 -> PeakMorningPalette to Icons.Rounded.WbTwilight
+                    in 11..14 -> PeakMiddayPalette to Icons.Rounded.WbSunny
+                    in 15..18 -> PeakEveningPalette to Icons.Rounded.WbTwilight
+                    else -> PeakNightPalette to Icons.Rounded.NightsStay
+                }
+                add(
+                    ListeningPassCardModel(
+                        section = ReplayPassSection.PEAK_HOUR,
+                        kicker = peakHourKicker,
+                        value = String.format(Locale.ROOT, "%02d:00", peakHour),
+                        detail = peakHourDetail,
+                        artworkUrl = null,
+                        badgeIcon = peakIcon,
+                        isCircularArt = true,
+                        fallbackPalette = peakPalette,
+                        hueShiftDegrees = 0f,
+                        meshPhase = 5.10f,
+                        isNumericHero = false,
+                    ),
+                )
+            }
+            if (discoveryValue != null && discoveryDetail != null) {
+                add(
+                    ListeningPassCardModel(
+                        section = ReplayPassSection.DISCOVERY,
+                        kicker = discoveryKicker,
+                        value = discoveryValue,
+                        detail = discoveryDetail,
+                        artworkUrl = null,
+                        badgeIcon = Icons.Rounded.Explore,
+                        isCircularArt = true,
+                        fallbackPalette = DiscoveryFallbackPalette,
+                        hueShiftDegrees = 0f,
+                        meshPhase = 2.20f,
                         isNumericHero = false,
                     ),
                 )
@@ -600,6 +732,8 @@ private fun MusicaListeningPassCard(
                             url = card.artworkUrl,
                             circular = card.isCircularArt,
                         )
+                    } else if (card.badgeIcon != null) {
+                        PassIconMedallion(icon = card.badgeIcon)
                     }
                 }
             }
@@ -674,6 +808,34 @@ private fun PassArtworkMedallion(
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
+        )
+    }
+}
+
+@Composable
+private fun PassIconMedallion(
+    icon: ImageVector,
+) {
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = 0.22f),
+                        Color.White.copy(alpha = 0.08f),
+                    ),
+                ),
+            )
+            .border(1.dp, Color.White.copy(alpha = 0.34f), CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.94f),
+            modifier = Modifier.size(24.dp),
         )
     }
 }
@@ -835,6 +997,9 @@ private fun tunePassSwatch(color: Color, index: Int): Color {
 
 @Composable
 internal fun formatCompactListeningDuration(ms: Long): String {
+    if (ms in 1L..59_999L) {
+        return stringResource(R.string.replay_pass_duration_sub_min)
+    }
     val totalMinutes = (ms / 60_000L).toInt().coerceAtLeast(0)
     return if (totalMinutes < 60) {
         stringResource(R.string.replay_pass_duration_min, totalMinutes)

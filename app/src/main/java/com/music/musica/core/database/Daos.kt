@@ -140,7 +140,10 @@ interface PlaylistDao {
 @Dao
 interface HistoryDao {
     @Insert
-    suspend fun insert(entry: PlayHistoryEntity)
+    suspend fun insert(entry: PlayHistoryEntity): Long
+
+    @Query("UPDATE play_history SET listenedDurationMs = :listenedDurationMs WHERE id = :id")
+    suspend fun updateDuration(id: Long, listenedDurationMs: Long)
 
     @Transaction
     @Query("SELECT * FROM play_history ORDER BY playedAtMs DESC LIMIT :limit")

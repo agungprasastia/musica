@@ -58,6 +58,37 @@ class HistoryReplayAggregatorTest {
         assertEquals(360_000L, summary.topAlbums[0].totalListenedMs)
         assertEquals("Manusia", summary.topAlbums[1].name)
         assertEquals(1, summary.topAlbums[1].playCount)
+
+        // Discovery & habits fields
+        assertEquals(3, summary.distinctSongs)
+        assertEquals(2, summary.distinctArtists)
+        assertEquals(2, summary.distinctAlbums)
+        assertEquals(1, summary.activeDaysCount)
+    }
+
+    @Test
+    fun summarize_computesWeightedPeakHourAndActiveDaysAcrossCalendarDays() {
+        val day1Morning = Calendar.getInstance().apply {
+            set(2026, Calendar.NOVEMBER, 20, 9, 15, 0)
+        }.timeInMillis
+        val day1Night = Calendar.getInstance().apply {
+            set(2026, Calendar.NOVEMBER, 20, 21, 30, 0)
+        }.timeInMillis
+        val day2Night = Calendar.getInstance().apply {
+            set(2026, Calendar.NOVEMBER, 21, 21, 45, 0)
+        }.timeInMillis
+
+        val events = listOf(
+            PlayEvent(song("s1", "Niki"), playedAtMs = day1Morning, listenedDurationMs = 60_000L),
+            PlayEvent(song("s2", "Tulus"), playedAtMs = day1Night, listenedDurationMs = 180_000L),
+            PlayEvent(song("s3", "Hindia"), playedAtMs = day2Night, listenedDurationMs = 240_000L),
+        )
+
+        val summary = HistoryReplayAggregator.summarize(events)
+        assertEquals(2, summary.activeDaysCount)
+        assertEquals(21, summary.peakHour)
+        assertEquals(3, summary.distinctSongs)
+        assertEquals(3, summary.distinctArtists)
     }
 
     @Test

@@ -200,13 +200,42 @@
     <string name="replay_pass_top_song_kicker">Lagu teratas</string>
     <string name="replay_pass_top_artist_kicker">Artis teratas</string>
     <string name="replay_pass_top_album_kicker">Album teratas</string>
+    <string name="replay_pass_peak_hour_kicker">Waktu favorit</string>
+    <string name="replay_pass_discovery_kicker">Jelajah musik</string>
     <string name="replay_pass_member_since">Anggota sejak</string>
     <string name="replay_pass_default_holder">Pendengar Musica</string>
-    <string name="replay_pass_plays_short">%1$d putaran</string>
     <string name="replay_pass_all_time_short">Semua waktu</string>
+    <string name="replay_pass_duration_sub_min">&lt;1 mnt</string>
     <string name="replay_pass_duration_min">%1$d mnt</string>
     <string name="replay_pass_duration_hr_min">%1$dj %2$dm</string>
     <string name="replay_pass_empty_detail">Mulai putar untuk Replay</string>
+    <string name="replay_pass_time_morning">Pagi</string>
+    <string name="replay_pass_time_midday">Siang</string>
+    <string name="replay_pass_time_evening">Sore</string>
+    <string name="replay_pass_time_night">Malam</string>
+    <plurals name="replay_pass_plays_short">
+        <item quantity="other">%1$d putaran</item>
+    </plurals>
+    <plurals name="replay_pass_active_days">
+        <item quantity="other">%1$d hari aktif</item>
+    </plurals>
+    <plurals name="replay_pass_songs_explored">
+        <item quantity="other">%1$d Lagu</item>
+    </plurals>
+    <plurals name="replay_pass_artists_short">
+        <item quantity="other">%1$d artis</item>
+    </plurals>
+    <plurals name="replay_pass_albums_short">
+        <item quantity="other">%1$d album</item>
+    </plurals>
+    <plurals name="replay_pass_artists_only_short">
+        <item quantity="other">%1$d artis unik</item>
+    </plurals>
+    <string name="replay_habits_title">Kebiasaan Mendengarkan</string>
+    <string name="replay_habits_songs">Lagu Unik</string>
+    <string name="replay_habits_artists">Artis</string>
+    <string name="replay_habits_albums">Album</string>
+    <string name="replay_habits_peak_note">Paling aktif pukul %1$s (%2$s) · %3$s</string>
 
     <!-- Downloads -->
     <string name="downloads_title">Unduhan Offline</string>

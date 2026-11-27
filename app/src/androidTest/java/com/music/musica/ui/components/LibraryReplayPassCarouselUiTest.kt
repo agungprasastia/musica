@@ -69,6 +69,11 @@ class LibraryReplayPassCarouselUiTest {
                 ),
             ),
             firstPlayedAtMs = nov2026,
+            distinctSongs = 18,
+            distinctArtists = 7,
+            distinctAlbums = 5,
+            activeDaysCount = 4,
+            peakHour = 21,
         )
 
         composeRule.setContent {

@@ -807,7 +807,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearHistory() {
-        viewModelScope.launch { container.libraryRepository.clearHistory() }
+        viewModelScope.launch {
+            container.playHistorySessionTracker.clearActiveSessions()
+            container.libraryRepository.clearHistory()
+        }
     }
 
     fun selectReplayPeriod(period: ReplayPeriod) {

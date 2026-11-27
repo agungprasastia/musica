@@ -1,6 +1,7 @@
 package com.music.musica.data.repository
 
 import com.music.musica.core.model.Song
+import java.util.Calendar
 import java.util.Locale
 
 enum class ReplayPassSection {
@@ -8,6 +9,8 @@ enum class ReplayPassSection {
     TOP_SONG,
     TOP_ARTIST,
     TOP_ALBUM,
+    PEAK_HOUR,
+    DISCOVERY,
 }
 
 data class PlayEvent(
@@ -46,6 +49,11 @@ data class ReplaySummary(
     val topArtists: List<RankedArtist> = emptyList(),
     val topAlbums: List<RankedAlbum> = emptyList(),
     val firstPlayedAtMs: Long? = null,
+    val distinctSongs: Int = 0,
+    val distinctArtists: Int = 0,
+    val distinctAlbums: Int = 0,
+    val activeDaysCount: Int = 0,
+    val peakHour: Int? = null,
 )
 
 /**
@@ -177,6 +185,26 @@ object HistoryReplayAggregator {
             .sortedWith(compareByDescending<RankedAlbum> { it.playCount }.thenByDescending { it.totalListenedMs })
             .take(limit)
 
+        val distinctSongs = valid.mapTo(hashSetOf()) { it.song.videoId }.size
+        val distinctArtists = artistMap.size
+        val distinctAlbums = albumMap.size
+
+        val calendar = Calendar.getInstance()
+        val activeDays = hashSetOf<Int>()
+        val hourWeights = LongArray(24)
+        valid.forEach { event ->
+            if (event.playedAtMs > 0L) {
+                calendar.timeInMillis = event.playedAtMs
+                val dayKey = calendar.get(Calendar.YEAR) * 1000 + calendar.get(Calendar.DAY_OF_YEAR)
+                activeDays.add(dayKey)
+                val hour = calendar.get(Calendar.HOUR_OF_DAY).coerceIn(0, 23)
+                hourWeights[hour] += event.listenedDurationMs
+            }
+        }
+        val peakHour = hourWeights.indices
+            .maxByOrNull { hourWeights[it] }
+            ?.takeIf { hourWeights[it] > 0L }
+
         return ReplaySummary(
             totalTracksPlayed = valid.size,
             totalListenedMs = totalMs,
@@ -184,6 +212,11 @@ object HistoryReplayAggregator {
             topArtists = topArtists,
             topAlbums = topAlbums,
             firstPlayedAtMs = firstPlayedAtMs,
+            distinctSongs = distinctSongs,
+            distinctArtists = distinctArtists,
+            distinctAlbums = distinctAlbums,
+            activeDaysCount = activeDays.size,
+            peakHour = peakHour,
         )
     }
 }
