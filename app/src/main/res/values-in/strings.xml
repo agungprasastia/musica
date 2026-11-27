@@ -187,12 +187,26 @@
     <string name="replay_this_month">Bulan Ini</string>
     <string name="replay_this_year">Tahun Ini</string>
     <string name="replay_all_time">Sepanjang Waktu</string>
+    <string name="replay_period_all_tab">Semua</string>
     <string name="replay_minutes_listened">Menit Didengar</string>
     <string name="replay_tracks_played">Lagu Diputar</string>
     <string name="replay_top_songs">Lagu Teratas</string>
     <string name="replay_top_artists">Artis Teratas</string>
+    <string name="replay_top_albums">Album Teratas</string>
     <string name="replay_plays_count">%1$d kali diputar</string>
     <string name="replay_card_stats">%1$d mnt · %2$d putaran</string>
+    <string name="replay_pass_eyebrow">Pengalaman mendengarkan Anda</string>
+    <string name="replay_pass_minutes_kicker">Menit didengar</string>
+    <string name="replay_pass_top_song_kicker">Lagu teratas</string>
+    <string name="replay_pass_top_artist_kicker">Artis teratas</string>
+    <string name="replay_pass_top_album_kicker">Album teratas</string>
+    <string name="replay_pass_member_since">Anggota sejak</string>
+    <string name="replay_pass_default_holder">Pendengar Musica</string>
+    <string name="replay_pass_plays_short">%1$d putaran</string>
+    <string name="replay_pass_all_time_short">Semua waktu</string>
+    <string name="replay_pass_duration_min">%1$d mnt</string>
+    <string name="replay_pass_duration_hr_min">%1$dj %2$dm</string>
+    <string name="replay_pass_empty_detail">Mulai putar untuk Replay</string>
 
     <!-- Downloads -->
     <string name="downloads_title">Unduhan Offline</string>

@@ -418,13 +418,17 @@ internal fun MusicaAppRoot(
                     3 -> LibraryTabHost(
                         vm = vm,
                         isSignedIn = authSession?.isSignedIn == true,
+                        listenerName = authSession?.profile?.name,
                         activeVideoId = activeVideoId,
                         downloadedIds = downloadedIds,
                         hazeState = hazeState,
                         settings = settings,
                         bottomPadding = chromeBottomPadding,
                         listState = libraryListState,
-                        onOpenReplay = { navigator.push(AppRoute.Replay) },
+                        onOpenReplay = { section ->
+                            vm.prepareReplayLaunch(section)
+                            navigator.push(AppRoute.Replay)
+                        },
                         onOpenDownloads = { navigator.push(AppRoute.Downloads) },
                         onOpenHistory = { navigator.push(AppRoute.History) },
                         onOpenLogin = { navigator.push(AppRoute.YtLogin) },
@@ -847,13 +851,14 @@ private fun MixesTabHost(
 private fun LibraryTabHost(
     vm: MainViewModel,
     isSignedIn: Boolean,
+    listenerName: String?,
     activeVideoId: String?,
     downloadedIds: Set<String>,
     hazeState: HazeState,
     settings: UserSettings,
     bottomPadding: Dp,
     listState: LazyListState,
-    onOpenReplay: () -> Unit,
+    onOpenReplay: (com.music.musica.data.repository.ReplayPassSection) -> Unit,
     onOpenDownloads: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenLogin: () -> Unit,
@@ -866,13 +871,21 @@ private fun LibraryTabHost(
     val likedSongs by vm.likedSongs.collectAsStateWithLifecycle()
     val localPlaylists by vm.localPlaylists.collectAsStateWithLifecycle()
     val remoteLibrary by vm.remoteLibrary.collectAsStateWithLifecycle()
-    val replaySummary by vm.replaySummary.collectAsStateWithLifecycle()
+    val replaySummary by vm.allTimeReplaySummary.collectAsStateWithLifecycle()
     val libraryRefreshing by vm.libraryRefreshing.collectAsStateWithLifecycle()
+    val memberSinceMs = remember(replaySummary.firstPlayedAtMs, vm.appInstalledAtMs) {
+        listOfNotNull(
+            replaySummary.firstPlayedAtMs?.takeIf { it > 0L },
+            vm.appInstalledAtMs.takeIf { it > 0L },
+        ).minOrNull()
+    }
     LibraryScreen(
         likedSongs = likedSongs,
         playlists = localPlaylists,
         remoteLibraryShelves = remoteLibrary,
         replaySummary = replaySummary,
+        listenerName = listenerName,
+        memberSinceMs = memberSinceMs,
         downloadedCount = downloadedIds.size,
         isSignedIn = isSignedIn,
         activeVideoId = activeVideoId,
@@ -1060,9 +1073,11 @@ private fun ReplayOverlayHost(
 ) {
     val replayPeriod by vm.replayPeriod.collectAsStateWithLifecycle()
     val replaySummary by vm.replaySummary.collectAsStateWithLifecycle()
+    val landingSection by vm.replayLandingSection.collectAsStateWithLifecycle()
     ReplayScreen(
         period = replayPeriod,
         summary = replaySummary,
+        landingSection = landingSection,
         hazeState = hazeState,
         frostedGlassEnabled = frostedGlassEnabled,
         reduceAnimation = reduceAnimation,
@@ -1071,6 +1086,7 @@ private fun ReplayOverlayHost(
         onBack = onBack,
         onPlayTopSongs = { songs, idx -> vm.playTracks(songs, idx, shuffled = false) },
         onOpenArtist = { artistId -> vm.openDetail(artistId) },
+        onOpenAlbum = { albumId -> vm.openDetail(albumId) },
     )
 }
 

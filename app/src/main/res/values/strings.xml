@@ -187,12 +187,26 @@
     <string name="replay_this_month">This Month</string>
     <string name="replay_this_year">This Year</string>
     <string name="replay_all_time">All Time</string>
+    <string name="replay_period_all_tab">All Time</string>
     <string name="replay_minutes_listened">Minutes Listened</string>
     <string name="replay_tracks_played">Tracks Played</string>
     <string name="replay_top_songs">Top Songs</string>
     <string name="replay_top_artists">Top Artists</string>
+    <string name="replay_top_albums">Top Albums</string>
     <string name="replay_plays_count">%1$d plays</string>
     <string name="replay_card_stats">%1$d min · %2$d plays</string>
+    <string name="replay_pass_eyebrow">Your listening experience</string>
+    <string name="replay_pass_minutes_kicker">Minutes listened</string>
+    <string name="replay_pass_top_song_kicker">Top song</string>
+    <string name="replay_pass_top_artist_kicker">Top artist</string>
+    <string name="replay_pass_top_album_kicker">Top album</string>
+    <string name="replay_pass_member_since">Member since</string>
+    <string name="replay_pass_default_holder">Musica Listener</string>
+    <string name="replay_pass_plays_short">%1$d plays</string>
+    <string name="replay_pass_all_time_short">All time</string>
+    <string name="replay_pass_duration_min">%1$d min</string>
+    <string name="replay_pass_duration_hr_min">%1$dh %2$dm</string>
+    <string name="replay_pass_empty_detail">Play music for Replay</string>
 
     <!-- Downloads -->
     <string name="downloads_title">Offline Downloads</string>
