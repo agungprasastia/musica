@@ -51,6 +51,7 @@ import androidx.compose.material.icons.rounded.SignalCellularAlt
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.Subtitles
 import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -140,6 +141,7 @@ fun SettingsScreen(
     onSetShowRemainingTime: (Boolean) -> Unit,
     onSetFrostedGlass: (Boolean) -> Unit,
     onSetReduceAnimation: (Boolean) -> Unit,
+    onSetHideTopPicks: (Boolean) -> Unit = {},
     onSetPreferWordLyrics: (Boolean) -> Unit,
     onSetBlurUnfocusedLyrics: (Boolean) -> Unit,
     onSetShowLyricsPreview: (Boolean) -> Unit,
@@ -376,7 +378,7 @@ fun SettingsScreen(
             }
 
             // 4. Appearance & Player Craft (inline PillSegmentedControls!)
-            if (matches("appearance", "tampilan", "theme", "tema", "dark", "light", "blur", "glass", "cover", "sampul", "volume", "remaining", "waktu", "animation", "animasi", "mesh")) {
+            if (matches("appearance", "tampilan", "theme", "tema", "dark", "light", "blur", "glass", "cover", "sampul", "volume", "remaining", "waktu", "animation", "animasi", "mesh", "top picks", "pilihan utama", "home", "beranda")) {
                 item(key = "sec_appearance") {
                     SettingsGroup(title = stringResource(R.string.settings_section_appearance)) {
                         SettingsSegmentedRow(
@@ -441,6 +443,14 @@ fun SettingsScreen(
                             subtitle = stringResource(R.string.settings_reduce_animation_desc),
                             checked = settings.reduceAnimation,
                             onCheckedChange = onSetReduceAnimation,
+                        )
+                        GroupDivider()
+                        SettingsSwitchRow(
+                            icon = Icons.Rounded.VisibilityOff,
+                            title = stringResource(R.string.settings_hide_top_picks),
+                            subtitle = stringResource(R.string.settings_hide_top_picks_desc),
+                            checked = settings.hideTopPicks,
+                            onCheckedChange = onSetHideTopPicks,
                         )
                     }
                 }

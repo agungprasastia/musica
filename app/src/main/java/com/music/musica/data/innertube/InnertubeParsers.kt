@@ -10,11 +10,14 @@ import com.music.musica.core.model.HomeShelf
 import com.music.musica.core.model.SearchPage
 import com.music.musica.core.model.ShelfItem
 import com.music.musica.core.model.Song
+import com.music.musica.core.model.WatchTarget
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 
 /**
  * Defensive, null-safe parsers for YouTube Music WEB_REMIX and ANDROID_MUSIC InnerTube JSON payloads.
@@ -176,6 +179,12 @@ object InnertubeParsers {
             } else {
                 null
             }
+        val immersiveHeader = headerNode?.obj("musicImmersiveHeaderRenderer")
+        val monthlyListenerCount = immersiveHeader?.obj("monthlyListenerCount")?.runsText()
+            ?.trim()?.takeIf { it.isNotBlank() }
+        val subscriberCountText = extractArtistSubscriberCount(immersiveHeader)
+        val radioTarget = extractHeaderWatchTarget(immersiveHeader, "startRadioButton")
+        val shuffleTarget = extractHeaderWatchTarget(immersiveHeader, "playButton")
         return DetailPage(
             browseId = browseId,
             type = type,
@@ -188,6 +197,10 @@ object InnertubeParsers {
             sections = sections,
             continuation = continuation,
             audioPlaylistId = audioPlaylistId,
+            monthlyListenerCount = monthlyListenerCount,
+            subscriberCountText = subscriberCountText,
+            radioTarget = radioTarget,
+            shuffleTarget = shuffleTarget,
         )
     }
 
@@ -342,7 +355,37 @@ object InnertubeParsers {
         return results.distinct()
     }
 
-    fun parseUpNext(root: JsonObject): List<Song> {
+    /**
+     * Collects songs from `FEmusic_history` in recency order, deduplicated by videoId.
+     */
+    fun parseHistorySongs(root: JsonObject): List<Song> {
+        val found = LinkedHashMap<String, Song>()
+        fun walk(el: JsonElement) {
+            when (el) {
+                is JsonObject -> {
+                    el.obj("musicResponsiveListItemRenderer")?.let { renderer ->
+                        val track = parseResponsiveListItem(
+                            renderer = renderer,
+                            fallbackCover = null,
+                            fallbackAlbum = null,
+                            fallbackArtist = null,
+                        ) as? ShelfItem.Track
+                        if (track != null) {
+                            found.putIfAbsent(track.song.videoId, track.song)
+                        }
+                        return
+                    }
+                    el.values.forEach(::walk)
+                }
+                is JsonArray -> el.forEach(::walk)
+                else -> Unit
+            }
+        }
+        walk(root)
+        return found.values.toList()
+    }
+
+    fun parseUpNext(root: JsonObject, preferAudio: Boolean = false): List<Song> {
         val tabs = root.obj("contents")
             ?.obj("singleColumnMusicWatchNextResultsRenderer")
             ?.obj("tabbedRenderer")
@@ -350,7 +393,7 @@ object InnertubeParsers {
             ?.arr("tabs")
             ?: return emptyList()
 
-        val songs = mutableListOf<Song>()
+        val songs = LinkedHashMap<String, Song>()
         tabs.forEach { tab ->
             val queueContents = tab.asObj()
                 ?.obj("tabRenderer")?.obj("content")
@@ -359,9 +402,11 @@ object InnertubeParsers {
                 ?: return@forEach
 
             queueContents.forEach { item ->
-                val renderer = item.asObj()?.obj("playlistPanelVideoRenderer")
-                    ?: item.asObj()?.obj("playlistPanelVideoWrapperRenderer")
-                        ?.obj("primaryRenderer")?.obj("playlistPanelVideoRenderer")
+                val obj = item.asObj() ?: return@forEach
+                val renderer = obj.obj("playlistPanelVideoRenderer")
+                    ?: obj.obj("playlistPanelVideoWrapperRenderer")?.let { wrapper ->
+                        selectPanelVideoRenderer(wrapper, preferAudio = preferAudio)
+                    }
                     ?: return@forEach
 
                 val videoId = renderer.str("videoId") ?: return@forEach
@@ -375,18 +420,73 @@ object InnertubeParsers {
                 val thumb = extractBestThumbnail(renderer.obj("thumbnail"))
                 val setVideoId = renderer.str("playlistSetVideoId")
 
-                songs += Song(
-                    videoId = videoId,
-                    title = title,
-                    artists = artists,
-                    album = album,
-                    durationMs = durationMs,
-                    thumbnailUrl = thumb,
-                    setVideoId = setVideoId,
+                songs.putIfAbsent(
+                    videoId,
+                    Song(
+                        videoId = videoId,
+                        title = title,
+                        artists = artists,
+                        album = album,
+                        durationMs = durationMs,
+                        thumbnailUrl = thumb,
+                        setVideoId = setVideoId,
+                    ),
                 )
             }
         }
-        return songs
+        return songs.values.toList()
+    }
+
+    private fun selectPanelVideoRenderer(wrapper: JsonObject, preferAudio: Boolean): JsonObject? {
+        val primary = wrapper.obj("primaryRenderer")?.obj("playlistPanelVideoRenderer")
+        if (!preferAudio) return primary
+        val candidates = buildList {
+            if (primary != null) add(primary)
+            wrapper.arr("counterpart")?.forEach { entry ->
+                entry.asObj()?.obj("counterpartRenderer")?.obj("playlistPanelVideoRenderer")?.let(::add)
+            }
+        }
+        return candidates.firstOrNull(::isAudioPanelRenderer) ?: primary
+    }
+
+    private fun isAudioPanelRenderer(renderer: JsonObject): Boolean {
+        val musicVideoType = renderer.obj("navigationEndpoint")
+            ?.obj("watchEndpoint")
+            ?.obj("watchEndpointMusicSupportedConfigs")
+            ?.obj("watchEndpointMusicConfig")
+            ?.str("musicVideoType")
+        if (musicVideoType == "MUSIC_VIDEO_TYPE_ATV") return true
+        if (musicVideoType == "MUSIC_VIDEO_TYPE_OMV" || musicVideoType == "MUSIC_VIDEO_TYPE_UGC") return false
+        val thumb = renderer.obj("thumbnail")?.arr("thumbnails")?.firstOrNull()?.asObj()
+        val w = thumb?.str("width")?.toIntOrNull()
+        val h = thumb?.str("height")?.toIntOrNull()
+        return w != null && h != null && w == h
+    }
+
+    private fun extractArtistSubscriberCount(immersiveHeader: JsonObject?): String? {
+        if (immersiveHeader == null) return null
+        val button2 = immersiveHeader.obj("subscriptionButton2")?.obj("subscribeButtonRenderer")
+        val button1 = immersiveHeader.obj("subscriptionButton")?.obj("subscribeButtonRenderer")
+        return button2?.obj("subscriberCountWithSubscribeText")?.runsText()?.trim()?.takeIf { it.isNotBlank() }
+            ?: button1?.obj("longSubscriberCountText")?.runsText()?.trim()?.takeIf { it.isNotBlank() }
+            ?: button1?.obj("shortSubscriberCountText")?.runsText()?.trim()?.takeIf { it.isNotBlank() }
+    }
+
+    private fun extractHeaderWatchTarget(immersiveHeader: JsonObject?, buttonKey: String): WatchTarget? {
+        val endpoint = immersiveHeader?.obj(buttonKey)
+            ?.obj("buttonRenderer")
+            ?.obj("navigationEndpoint")
+            ?.obj("watchEndpoint")
+            ?: return null
+        val playlistId = endpoint.str("playlistId")?.takeIf { it.isNotBlank() } ?: return null
+        val decodedParams = endpoint.str("params")?.takeIf { it.isNotBlank() }?.let { raw ->
+            runCatching { URLDecoder.decode(raw, StandardCharsets.UTF_8.name()) }.getOrDefault(raw)
+        }
+        return WatchTarget(
+            playlistId = playlistId,
+            videoId = endpoint.str("videoId")?.takeIf { it.isNotBlank() },
+            params = decodedParams,
+        )
     }
 
     fun parseLyricsBrowseId(nextRoot: JsonObject): String? {

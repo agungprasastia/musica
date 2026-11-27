@@ -35,8 +35,12 @@ import com.music.musica.data.lyrics.LyricsPlusProvider
 import com.music.musica.data.lyrics.LyricsRepository
 import com.music.musica.data.lyrics.LyricsResult
 import com.music.musica.data.lyrics.YouTubeLyricsProvider
+import com.music.musica.data.repository.ArtistPortraitResolver
 import com.music.musica.data.repository.LibraryRepository
+import com.music.musica.data.repository.TopPicksCacheStore
+import com.music.musica.data.repository.TopPicksEngine
 import com.music.musica.data.repository.YtMusicRepository
+import com.music.musica.data.repository.YtMusicTopPicksDataSource
 import com.music.musica.data.stream.InnerTubeXSource
 import com.music.musica.data.stream.NewPipeFallbackSource
 import com.music.musica.data.stream.PoTokenWebViewProvider
@@ -114,6 +118,13 @@ class AppContainer(context: Context) {
     )
 
     val ytMusicRepository: YtMusicRepository = YtMusicRepository(innertubeClient)
+
+    val artistPortraitResolver: ArtistPortraitResolver = ArtistPortraitResolver()
+    val topPicksCacheStore: TopPicksCacheStore = TopPicksCacheStore(appContext)
+    val topPicksEngine: TopPicksEngine = TopPicksEngine(
+        dataSource = YtMusicTopPicksDataSource(ytMusicRepository),
+        portraitLookup = artistPortraitResolver,
+    )
 
     val libraryRepository: LibraryRepository = LibraryRepository(
         db = database,

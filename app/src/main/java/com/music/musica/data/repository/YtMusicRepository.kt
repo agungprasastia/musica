@@ -11,9 +11,12 @@ import com.music.musica.core.model.MixesFeed
 import com.music.musica.core.model.SearchFilter
 import com.music.musica.core.model.SearchPage
 import com.music.musica.core.model.Song
+import com.music.musica.core.model.WatchTarget
 import com.music.musica.data.innertube.MusicaInnertubeClient
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 
 class YtMusicRepository(
@@ -21,6 +24,9 @@ class YtMusicRepository(
 ) {
     private val detailCache = ConcurrentHashMap<String, DetailPage>()
     private val categoryCoverCache = ConcurrentHashMap<String, String>()
+    private val historyMutex = Mutex()
+    @Volatile
+    private var historyMemo: Pair<Long, List<Song>>? = null
 
     suspend fun loadHome(continuation: String? = null): Result<BrowsePage> = runCatching {
         client.browseHome(continuation)
@@ -71,19 +77,23 @@ class YtMusicRepository(
         client.browseMixes().shelves
     }
 
+    suspend fun loadMixedForYouKeyed(isEnglishLocale: Boolean): Result<List<MixEntry>> = runCatching {
+        coroutineScope {
+            val localizedDef = async { client.browseMixedForYou() }
+            val englishDef = if (!isEnglishLocale) {
+                async { runCatching { client.browseMixedForYou(languageOverride = "en") }.getOrDefault(emptyList()) }
+            } else {
+                null
+            }
+            val localized = localizedDef.await()
+            val englishById = englishDef?.await().orEmpty().associate { it.id to it.title }
+            localized.map { item -> MixEntry(item = item, englishTitle = englishById[item.id] ?: item.title) }
+        }
+    }
+
     suspend fun loadMixesFeed(isSignedIn: Boolean, isEnglishLocale: Boolean): Result<MixesFeed> = runCatching {
         val personalized = if (isSignedIn) {
-            val entries = coroutineScope {
-                val localizedDef = async { client.browseMixedForYou() }
-                val englishDef = if (!isEnglishLocale) {
-                    async { runCatching { client.browseMixedForYou(languageOverride = "en") }.getOrDefault(emptyList()) }
-                } else {
-                    null
-                }
-                val localized = localizedDef.await()
-                val englishById = englishDef?.await().orEmpty().associate { it.id to it.title }
-                localized.map { item -> MixEntry(item = item, englishTitle = englishById[item.id] ?: item.title) }
-            }
+            val entries = loadMixedForYouKeyed(isEnglishLocale).getOrThrow()
             ExploreAndMixesOrganizer.groupPersonalizedMixes(entries)
         } else {
             null
@@ -179,6 +189,32 @@ class YtMusicRepository(
     suspend fun upNext(videoId: String, playlistId: String? = null): List<Song> =
         runCatching { client.upNext(videoId, playlistId) }.getOrDefault(emptyList())
 
+    suspend fun loadWatchQueue(target: WatchTarget, preferAudio: Boolean = false): Result<List<Song>> =
+        runCatching {
+            client.nextWatchQueue(
+                playlistId = target.playlistId,
+                videoId = target.videoId,
+                params = target.params,
+                preferAudio = preferAudio,
+            )
+        }
+
+    suspend fun loadMoodCategoryShelves(params: String): Result<List<HomeShelf>> =
+        runCatching { client.browseMoodCategory(params) }
+
+    suspend fun loadRemoteHistory(forceRefresh: Boolean = false): Result<List<Song>> = runCatching {
+        historyMutex.withLock {
+            val now = System.currentTimeMillis()
+            val cached = historyMemo
+            if (!forceRefresh && cached != null && now - cached.first < REMOTE_HISTORY_MEMO_MS) {
+                return@withLock cached.second
+            }
+            val songs = client.browseHistory()
+            historyMemo = now to songs
+            songs
+        }
+    }
+
     suspend fun setLike(videoId: String, status: LikeStatus): Boolean =
         runCatching { client.setLikeStatus(videoId, status) }.getOrDefault(false)
 
@@ -225,5 +261,10 @@ class YtMusicRepository(
 
     fun clearCache() {
         detailCache.clear()
+        historyMemo = null
+    }
+
+    companion object {
+        private const val REMOTE_HISTORY_MEMO_MS = 120_000L
     }
 }

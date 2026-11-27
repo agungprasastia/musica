@@ -56,6 +56,25 @@ fun upsizeArtworkUrl(url: String?, sizePx: Int = 544): String? {
     return url
 }
 
+/**
+ * Formats an artwork URL for portrait (`3:4`) or smart-cropped square artist portraits:
+ * - Portrait CDN templates (`mzstatic.com/image/thumb/...`) adjust their trailing `{side}x{side}cc.jpg` segment.
+ * - Google/YouTube unsigned banner thumbnails request `-p` smart subject cropping (`=w{w}-h{h}-p-l90-rj`)
+ *   so artist faces stay centered instead of cropping an empty banner edge.
+ */
+fun smartCropArtworkUrl(url: String?, widthPx: Int, heightPx: Int = widthPx): String? {
+    if (url.isNullOrBlank()) return null
+    if (url.contains("mzstatic.com/image/thumb/")) {
+        val side = maxOf(widthPx, heightPx)
+        return url.substringBeforeLast('/') + "/${side}x${side}cc.jpg"
+    }
+    if (url.contains('?') || url.contains("-s-")) return url
+    if (GOOGLE_THUMB_REGEX.containsMatchIn(url)) {
+        return url.replace(GOOGLE_THUMB_REGEX, "=w$widthPx-h$heightPx-p-l90-rj")
+    }
+    return upsizeArtworkUrl(url, maxOf(widthPx, heightPx))
+}
+
 enum class BrowseType {
     ALBUM,
     ARTIST,
@@ -182,6 +201,10 @@ data class DetailPage(
     val sections: List<HomeShelf> = emptyList(),
     val continuation: String? = null,
     val audioPlaylistId: String? = null,
+    val monthlyListenerCount: String? = null,
+    val subscriberCountText: String? = null,
+    val radioTarget: WatchTarget? = null,
+    val shuffleTarget: WatchTarget? = null,
 )
 
 enum class SearchFilter(val innertubeParams: String?) {

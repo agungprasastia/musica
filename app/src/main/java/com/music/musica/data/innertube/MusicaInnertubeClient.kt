@@ -4,10 +4,12 @@ import com.music.musica.core.auth.SapisidHashSigner
 import com.music.musica.core.model.AccountProfile
 import com.music.musica.core.model.BrowsePage
 import com.music.musica.core.model.DetailPage
+import com.music.musica.core.model.HomeShelf
 import com.music.musica.core.model.LikeStatus
 import com.music.musica.core.model.SearchFilter
 import com.music.musica.core.model.SearchPage
 import com.music.musica.core.model.Song
+import com.music.musica.core.model.TopPickMood
 import com.music.musica.core.network.HttpClients
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
@@ -66,6 +68,22 @@ class MusicaInnertubeClient(
             put("browseId", "FEmusic_moods_and_genres")
         } ?: return BrowsePage(emptyList())
         return InnertubeParsers.parseBrowseHome(root)
+    }
+
+    suspend fun browseMoodCategory(params: String): List<HomeShelf> {
+        val root = postMusic("browse") {
+            put("browseId", TopPickMood.CATEGORY_BROWSE_ID)
+            put("params", params)
+        } ?: return emptyList()
+        return InnertubeParsers.parseBrowseHome(root).shelves
+    }
+
+    suspend fun browseHistory(): List<Song> {
+        if (cookieProvider().isNullOrBlank()) return emptyList()
+        val root = postMusic("browse") {
+            put("browseId", "FEmusic_history")
+        } ?: return emptyList()
+        return InnertubeParsers.parseHistorySongs(root)
     }
 
     suspend fun browseMixedForYou(languageOverride: String? = null): List<com.music.musica.core.model.ShelfItem> {
@@ -141,14 +159,28 @@ class MusicaInnertubeClient(
         return InnertubeParsers.parseSearchSuggestions(root)
     }
 
-    suspend fun upNext(videoId: String, playlistId: String? = null): List<Song> {
+    suspend fun upNext(videoId: String, playlistId: String? = null): List<Song> =
+        nextWatchQueue(
+            playlistId = playlistId ?: "RDAMVM$videoId",
+            videoId = videoId,
+            params = null,
+            preferAudio = false,
+        )
+
+    suspend fun nextWatchQueue(
+        playlistId: String,
+        videoId: String? = null,
+        params: String? = null,
+        preferAudio: Boolean = false,
+    ): List<Song> {
         val root = postMusic("next") {
-            put("videoId", videoId)
-            put("playlistId", playlistId ?: "RDAMVM$videoId")
+            if (!videoId.isNullOrBlank()) put("videoId", videoId)
+            put("playlistId", playlistId)
+            if (!params.isNullOrBlank()) put("params", params)
             put("isAudioOnly", true)
             put("enablePersistentPlaylistPanel", true)
         } ?: return emptyList()
-        return InnertubeParsers.parseUpNext(root)
+        return InnertubeParsers.parseUpNext(root, preferAudio = preferAudio)
     }
 
     suspend fun fetchYouTubeLyrics(videoId: String): YouTubeLyricsPayload? {

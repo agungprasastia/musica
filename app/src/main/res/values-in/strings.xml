@@ -58,6 +58,29 @@
     <!-- Home / Explore / Mixes -->
     <string name="home_top_picks">Pilihan Utama untuk Kamu</string>
     <string name="home_recently_played">Baru Diputar</string>
+    <string name="top_pick_new_from">Baru dari %1$s</string>
+    <string name="top_pick_made_for_you">Dibuat untuk Kamu</string>
+    <string name="top_pick_named_station">Stasiun %1$s</string>
+    <string name="top_pick_your_station">Stasiun Kamu</string>
+    <string name="top_pick_discovery_station">Stasiun Temuan</string>
+    <string name="top_pick_mood_for_you">Suasana untuk Kamu</string>
+    <string name="top_pick_featuring">Menampilkan %1$s</string>
+    <string name="top_pick_and_similar">%1$s &amp; Artis Serupa</string>
+    <string name="top_pick_load_failed">Gagal memulai stasiun ini</string>
+    <string name="mood_energy">Energi</string>
+    <string name="mood_energy_line">Lagu penuh semangat untuk memacu harimu.</string>
+    <string name="mood_relax">Santai</string>
+    <string name="mood_relax_line">Irama tenang untuk melepas penat.</string>
+    <string name="mood_feeling_blue">Galau</string>
+    <string name="mood_feeling_blue_line">Lagu syahdu untuk saat ingin merenung.</string>
+    <string name="mood_feel_good">Bahagia</string>
+    <string name="mood_feel_good_line">Pilihan ceria agar suasana hati tetap naik.</string>
+    <string name="mood_focus">Fokus</string>
+    <string name="mood_focus_line">Alunan stabil untuk menjaga konsentrasi.</string>
+    <string name="mood_heartbreak">Patah Hati</string>
+    <string name="mood_heartbreak_line">Lagu jujur saat hatimu sedang rapuh.</string>
+    <string name="mood_love">Cinta</string>
+    <string name="mood_love_line">Lagu romantis untuk momen spesial.</string>
     <string name="explore_title">Jelajah</string>
     <string name="mixes_title">Mix</string>
     <string name="mixes_subtitle">Stasiun pilihan dan mix tanpa henti</string>
@@ -270,6 +293,8 @@
     <string name="settings_frosted_glass_desc">Blur transparan pada bar dan lembaran menu</string>
     <string name="settings_reduce_animation">Kurangi Animasi</string>
     <string name="settings_reduce_animation_desc">Sederhanakan mesh gradient dan transisi</string>
+    <string name="settings_hide_top_picks">Sembunyikan Pilihan Utama</string>
+    <string name="settings_hide_top_picks_desc">Sembunyikan carousel Pilihan Utama di Beranda</string>
 
     <string name="settings_lyrics_prefer_word">Prioritaskan Lirik Per Kata</string>
     <string name="settings_lyrics_prefer_word_desc">Tetap cari penyedia dengan sinkronisasi kata/suku kata</string>
