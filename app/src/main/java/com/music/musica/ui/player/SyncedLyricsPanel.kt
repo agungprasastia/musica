@@ -106,12 +106,12 @@ fun SyncedLyricsPanel(
     playerPositionMs: Long,
     isPlaying: Boolean,
     playbackSpeed: Float,
-    blurUnfocusedLyrics: Boolean = true,
     reduceAnimation: Boolean,
     onSeekTo: (Long) -> Unit,
     onChangeOffset: (Long) -> Unit,
     onSwitchProvider: (LyricsSourceId) -> Unit,
     modifier: Modifier = Modifier,
+    blurUnfocusedLyrics: Boolean = true,
 ) {
     var showOffsetSheet by remember { mutableStateOf(false) }
     var showProviderSheet by remember { mutableStateOf(false) }

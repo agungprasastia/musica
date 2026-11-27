@@ -73,8 +73,8 @@ fun MiniPlayer(
     onTogglePlayPause: () -> Unit,
     onSkipNext: () -> Unit,
     onSkipPrevious: () -> Unit,
-    isInline: Boolean = false,
     modifier: Modifier = Modifier,
+    isInline: Boolean = false,
 ) {
     val song = playerState.currentSong ?: return
     val shape = RoundedCornerShape(percent = 50)

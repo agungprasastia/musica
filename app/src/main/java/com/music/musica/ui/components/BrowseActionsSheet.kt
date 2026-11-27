@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
@@ -43,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -167,7 +170,7 @@ fun BrowseActionsSheet(
                         overflow = TextOverflow.Ellipsis,
                     )
                     val subtitleText = target.subtitle ?: if (userPlaylist != null) {
-                        stringResource(R.string.library_songs_count, userPlaylist.songCount)
+                        pluralStringResource(R.plurals.library_songs_count, userPlaylist.songCount, userPlaylist.songCount)
                     } else null
                     if (!subtitleText.isNullOrBlank()) {
                         Text(
@@ -284,7 +287,8 @@ fun BrowseActionsSheet(
     }
 
     if (showRenameDialog && userPlaylist != null && onRenamePlaylist != null) {
-        var newName by remember(userPlaylist.title) { mutableStateOf(userPlaylist.title) }
+        val nameState = remember(userPlaylist.title) { TextFieldState(userPlaylist.title) }
+        val newName = nameState.text.toString()
         LiquidGlassDialog(
             hazeState = hazeState,
             onDismiss = { showRenameDialog = false },
@@ -315,9 +319,8 @@ fun BrowseActionsSheet(
                 contentAlignment = Alignment.CenterStart,
             ) {
                 BasicTextField(
-                    value = newName,
-                    onValueChange = { newName = it },
-                    singleLine = true,
+                    state = nameState,
+                    lineLimits = TextFieldLineLimits.SingleLine,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = fg),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     modifier = Modifier.fillMaxWidth(),

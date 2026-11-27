@@ -81,8 +81,8 @@ fun QueuePanel(
     onSelectIndex: (Int) -> Unit,
     onMoveItem: (Int, Int) -> Unit,
     onRemoveItem: (Int) -> Unit,
-    onClearUpcoming: () -> Unit = {},
     modifier: Modifier = Modifier,
+    onClearUpcoming: () -> Unit = {},
 ) {
     val hasUpcoming = currentIndex >= 0 && currentIndex < queue.lastIndex
 

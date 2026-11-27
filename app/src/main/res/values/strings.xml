@@ -25,7 +25,6 @@
     <string name="onboarding_continue_guest">Skip sign in</string>
     <string name="onboarding_connect_title">Personalize Your Feed</string>
     <string name="onboarding_connect_subtitle">Sign in to YouTube Music to sync your Home recommendations, Liked Songs, and playlists—or skip anytime.</string>
-    <string name="onboarding_skip">Skip for now</string>
     <string name="auth_login_title">Sign in to YouTube Music</string>
     <string name="auth_guest_mode">Guest Mode</string>
     <string name="auth_signed_in_as">Signed in as %1$s</string>
@@ -41,7 +40,6 @@
     <string name="action_previous">Previous</string>
     <string name="action_retry">Retry</string>
     <string name="action_cancel">Cancel</string>
-    <string name="action_done">Done</string>
     <string name="action_save">Save</string>
     <string name="action_saved">Saved</string>
     <string name="action_like">Like</string>
@@ -54,20 +52,13 @@
     <string name="action_back">Back</string>
     <string name="action_more">More</string>
     <string name="action_show_all">See All</string>
-    <string name="state_loading">Loading…</string>
     <string name="musica_empty_state">Nothing here yet</string>
     <string name="state_error_generic">Something went wrong. Please try again.</string>
-    <string name="state_offline">You are offline</string>
 
     <!-- Home / Explore / Mixes -->
-    <string name="home_greeting_morning">Good morning</string>
-    <string name="home_greeting_afternoon">Good afternoon</string>
-    <string name="home_greeting_evening">Good evening</string>
-    <string name="home_quick_picks">Quick Picks</string>
     <string name="home_top_picks">Top Picks for You</string>
     <string name="home_recently_played">Recently Played</string>
     <string name="explore_title">Explore</string>
-    <string name="explore_moods_genres">Moods &amp; Genres</string>
     <string name="mixes_title">Mixes</string>
     <string name="mixes_subtitle">Curated stations and endless mixes</string>
     <string name="mixes_for_you">Mixed for You</string>
@@ -91,15 +82,15 @@
     <string name="library_title">Library</string>
     <string name="library_liked_songs">Liked Songs</string>
     <string name="library_playlists">Playlists</string>
-    <string name="library_albums">Albums</string>
-    <string name="library_artists">Artists</string>
     <string name="library_downloads">Downloads</string>
     <string name="library_history">History</string>
-    <string name="library_replay">Replay</string>
     <string name="library_new_playlist">New Playlist</string>
     <string name="library_playlist_name_hint">Playlist name</string>
     <string name="library_add_to_playlist">Add to Playlist</string>
-    <string name="library_songs_count">%1$d songs</string>
+    <plurals name="library_songs_count">
+        <item quantity="one">%1$d song</item>
+        <item quantity="other">%1$d songs</item>
+    </plurals>
 
     <!-- Song Actions Menu -->
     <string name="menu_play_next">Play Next</string>
@@ -111,7 +102,6 @@
     <string name="menu_undislike">Remove Dislike</string>
     <string name="menu_add_playlist">Add to Playlist</string>
     <string name="menu_download">Download Offline</string>
-    <string name="menu_remove_download">Remove Download</string>
     <string name="menu_download_all">Download All</string>
     <string name="menu_save_to_library">Save to Library</string>
     <string name="menu_remove_from_library">Remove from Library</string>
@@ -136,31 +126,28 @@
     <string name="toast_playlist_deleted">Playlist deleted</string>
 
     <!-- Player & Now Playing -->
-    <string name="player_now_playing">Now Playing</string>
     <string name="player_queue">Playing Next</string>
     <string name="player_lyrics">Lyrics</string>
     <string name="player_autoplay">Autoplay</string>
     <string name="player_autoplay_subtitle">Keep playing similar tracks when the queue ends</string>
-    <string name="player_nothing_playing">Not Playing</string>
     <string name="player_speed_title">Playback Speed</string>
     <string name="player_sleep_timer">Sleep Timer</string>
     <string name="player_sleep_off">Off</string>
     <string name="player_sleep_end_of_track">Stop after this track</string>
-    <string name="player_sleep_minutes">%1$d minutes</string>
+    <plurals name="player_sleep_minutes">
+        <item quantity="one">%1$d minute</item>
+        <item quantity="other">%1$d minutes</item>
+    </plurals>
     <string name="player_sleep_remaining">Sleep in %1$s</string>
     <string name="player_equalizer">Equalizer</string>
     <string name="player_equalizer_unavailable">No system equalizer available on this device</string>
 
     <!-- Lyrics -->
-    <string name="lyrics_loading">Finding lyrics…</string>
     <string name="lyrics_unavailable">No lyrics available for this track</string>
     <string name="lyrics_source_label">Source: %1$s</string>
     <string name="lyrics_offset_title">Lyrics Timing Offset</string>
     <string name="lyrics_offset_reset">Reset</string>
     <string name="lyrics_provider_title">Lyrics Provider</string>
-    <string name="lyrics_word_synced">Word-synced</string>
-    <string name="lyrics_line_synced">Line-synced</string>
-    <string name="lyrics_plain">Plain text</string>
 
     <!-- Stats for Nerds -->
     <string name="stats_title">Stats for Nerds</string>
@@ -186,15 +173,16 @@
     <string name="replay_title">Replay</string>
     <string name="replay_this_month">This Month</string>
     <string name="replay_this_year">This Year</string>
-    <string name="replay_all_time">All Time</string>
     <string name="replay_period_all_tab">All Time</string>
     <string name="replay_minutes_listened">Minutes Listened</string>
     <string name="replay_tracks_played">Tracks Played</string>
     <string name="replay_top_songs">Top Songs</string>
     <string name="replay_top_artists">Top Artists</string>
     <string name="replay_top_albums">Top Albums</string>
-    <string name="replay_plays_count">%1$d plays</string>
-    <string name="replay_card_stats">%1$d min · %2$d plays</string>
+    <plurals name="replay_plays_count">
+        <item quantity="one">%1$d play</item>
+        <item quantity="other">%1$d plays</item>
+    </plurals>
     <string name="replay_pass_eyebrow">Your listening experience</string>
     <string name="replay_pass_minutes_kicker">Minutes listened</string>
     <string name="replay_pass_top_song_kicker">Top song</string>
@@ -233,11 +221,13 @@
     <string name="downloads_tab_tracks">Tracks</string>
     <string name="downloads_tab_collections">Collections</string>
     <string name="downloads_singles_collection">Individual Tracks</string>
-    <string name="downloads_collection_summary">%1$d of %2$d songs • %3$s</string>
+    <plurals name="downloads_collection_summary">
+        <item quantity="one">%1$d of %2$d song • %3$s</item>
+        <item quantity="other">%1$d of %2$d songs • %3$s</item>
+    </plurals>
     <string name="downloads_status_queued">Queued</string>
     <string name="downloads_status_waiting_wifi">Waiting for Wi-Fi…</string>
     <string name="downloads_status_downloading">Downloading %1$d%%</string>
-    <string name="downloads_status_completed">Downloaded</string>
     <string name="downloads_status_failed">Failed</string>
     <string name="downloads_notification_channel">Offline Downloads</string>
     <string name="downloads_notification_progress">Downloading %1$d of %2$d — %3$d%%</string>
@@ -289,16 +279,13 @@
 
     <string name="settings_lyrics_prefer_word">Prefer Word-Synced Lyrics</string>
     <string name="settings_lyrics_prefer_word_desc">Keep searching providers for syllable/word timing</string>
-    <string name="settings_lyrics_providers">Lyrics Providers</string>
 
     <string name="settings_clear_audio_cache">Clear Audio Cache</string>
     <string name="settings_clear_image_cache">Image Cache</string>
     <string name="settings_cache_cleared">Cache cleared</string>
 
     <string name="settings_app_language">App Language</string>
-    <string name="language_system">System Default</string>
     <string name="language_english">English</string>
-    <string name="language_indonesian">Bahasa Indonesia</string>
 
     <string name="settings_version">Version %1$s</string>
     <string name="settings_about_disclaimer">Musica is an independent, open-source YouTube Music client not affiliated with Google LLC or YouTube.</string>

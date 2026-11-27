@@ -28,6 +28,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Sort
@@ -70,6 +73,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -159,7 +163,8 @@ fun DetailScreen(
 
     var searchOpen by remember(page?.browseId) { mutableStateOf(false) }
     var sortMenuOpen by remember(page?.browseId) { mutableStateOf(false) }
-    var filterQuery by remember(page?.browseId) { mutableStateOf("") }
+    val filterState = remember(page?.browseId) { TextFieldState() }
+    val filterQuery = filterState.text.toString()
     var sortOrder by remember(page?.browseId) { mutableStateOf(TrackSortOrder.DEFAULT) }
     var aboutExpanded by remember(page?.browseId) { mutableStateOf(false) }
     val detailHazeState = rememberHazeState()
@@ -346,16 +351,15 @@ fun DetailScreen(
                                         )
                                     }
                                     BasicTextField(
-                                        value = filterQuery,
-                                        onValueChange = { filterQuery = it },
-                                        singleLine = true,
+                                        state = filterState,
+                                        lineLimits = TextFieldLineLimits.SingleLine,
                                         textStyle = MaterialTheme.typography.bodyMedium.copy(color = palette.onBackground),
                                         cursorBrush = SolidColor(palette.accent),
                                         modifier = Modifier.fillMaxWidth(),
                                     )
                                 }
                                 if (filterQuery.isNotEmpty()) {
-                                    IconButton(onClick = { filterQuery = "" }, modifier = Modifier.size(26.dp)) {
+                                    IconButton(onClick = { filterState.clearText() }, modifier = Modifier.size(26.dp)) {
                                         Icon(
                                             imageVector = Icons.Rounded.Close,
                                             contentDescription = stringResource(R.string.action_clear),
@@ -584,7 +588,7 @@ fun DetailScreen(
                         liveBlur = true,
                         onClick = {
                             searchOpen = !searchOpen
-                            if (!searchOpen) filterQuery = ""
+                            if (!searchOpen) filterState.clearText()
                         },
                     )
                     FrostedCircleButton(
@@ -862,7 +866,7 @@ private fun ReleaseHeroHeader(
             rawSub.contains("mnt", ignoreCase = true)
         if (!alreadyHasCounts && detail.tracks.isNotEmpty()) {
             if (isNotEmpty()) append(" · ")
-            append(stringResource(R.string.library_songs_count, detail.tracks.size))
+            append(pluralStringResource(R.plurals.library_songs_count, detail.tracks.size, detail.tracks.size))
             if (totalMinutes > 0) {
                 append(" · ")
                 append(stringResource(R.string.detail_duration_minutes, totalMinutes))

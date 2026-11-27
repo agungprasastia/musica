@@ -19,6 +19,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
@@ -150,7 +153,8 @@ fun SettingsScreen(
     onImportBackup: () -> Unit,
     onSetLanguage: (AppLanguage) -> Unit,
 ) {
-    var searchQuery by remember { mutableStateOf("") }
+    val searchState = rememberTextFieldState()
+    val searchQuery = searchState.text.toString()
     var confirmSignOut by remember { mutableStateOf(false) }
     var pickingWifiQuality by remember { mutableStateOf(false) }
     var pickingCellQuality by remember { mutableStateOf(false) }
@@ -216,16 +220,15 @@ fun SettingsScreen(
                     )
                 }
                 BasicTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    singleLine = true,
+                    state = searchState,
+                    lineLimits = TextFieldLineLimits.SingleLine,
                     textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
             if (searchQuery.isNotEmpty()) {
-                IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(26.dp)) {
+                IconButton(onClick = { searchState.clearText() }, modifier = Modifier.size(26.dp)) {
                     Icon(
                         imageVector = Icons.Rounded.Close,
                         contentDescription = stringResource(R.string.action_clear),
