@@ -322,6 +322,7 @@ fun MeshGradientBackground(
     driftKey: Any = Unit,
     reduceAnimation: Boolean = false,
     continuous: Boolean = false,
+    initialPhase: Float = 0.35f,
     driftMillis: Int = 8_000,
     colorFadeMillis: Int = 1_400,
     blurRadius: Dp = 56.dp,
@@ -342,11 +343,11 @@ fun MeshGradientBackground(
         label = "mesh_base",
     )
 
-    val drift = remember { Animatable(0f) }
+    val drift = remember { Animatable(initialPhase) }
 
-    LaunchedEffect(driftKey, reduceAnimation, continuous, driftMillis) {
+    LaunchedEffect(driftKey, reduceAnimation, continuous, driftMillis, initialPhase) {
         when {
-            reduceAnimation -> drift.snapTo(0.35f)
+            reduceAnimation -> drift.snapTo(initialPhase)
             continuous -> {
                 while (isActive) {
                     drift.animateTo(
@@ -356,9 +357,9 @@ fun MeshGradientBackground(
                 }
             }
             else -> {
-                drift.snapTo(0f)
+                drift.snapTo(initialPhase)
                 drift.animateTo(
-                    targetValue = (1.6 * PI).toFloat(),
+                    targetValue = initialPhase + (1.6 * PI).toFloat(),
                     animationSpec = tween(durationMillis = driftMillis, easing = FastOutSlowInEasing),
                 )
             }

@@ -29,6 +29,7 @@ import com.music.musica.core.settings.UserSettings
 import com.music.musica.data.backup.FullBackupSerializer
 import com.music.musica.data.lyrics.LyricsQuery
 import com.music.musica.data.lyrics.LyricsResult
+import com.music.musica.data.repository.ReplayPassSection
 import com.music.musica.data.repository.ReplaySummary
 import com.music.musica.ui.components.BrowseActionTarget
 import com.music.musica.ui.navigation.AppNavigator
@@ -151,11 +152,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var lyricsJob: Job? = null
 
     // ---- Replay ----
-    private val _replayPeriod = MutableStateFlow(ReplayPeriod.THIS_MONTH)
+    private val _replayPeriod = MutableStateFlow(ReplayPeriod.ALL_TIME)
     val replayPeriod: StateFlow<ReplayPeriod> = _replayPeriod.asStateFlow()
+    private val _replayLandingSection = MutableStateFlow(ReplayPassSection.MINUTES)
+    val replayLandingSection: StateFlow<ReplayPassSection> = _replayLandingSection.asStateFlow()
     val replaySummary: StateFlow<ReplaySummary> = _replayPeriod
         .flatMapLatest { container.libraryRepository.observeReplay(it) }
         .stateIn(viewModelScope, SharingStarted.Lazily, ReplaySummary())
+    val allTimeReplaySummary: StateFlow<ReplaySummary> = container.libraryRepository
+        .observeReplay(ReplayPeriod.ALL_TIME)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), ReplaySummary())
+    val appInstalledAtMs: Long = runCatching {
+        application.packageManager.getPackageInfo(application.packageName, 0).firstInstallTime
+    }.getOrDefault(System.currentTimeMillis())
 
     private var exploreLoaded = false
     private var mixesLoaded = false
@@ -798,11 +807,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearHistory() {
-        viewModelScope.launch { container.libraryRepository.clearHistory() }
+        viewModelScope.launch {
+            container.playHistorySessionTracker.clearActiveSessions()
+            container.libraryRepository.clearHistory()
+        }
     }
 
     fun selectReplayPeriod(period: ReplayPeriod) {
         _replayPeriod.value = period
+    }
+
+    fun prepareReplayLaunch(section: ReplayPassSection) {
+        _replayPeriod.value = ReplayPeriod.ALL_TIME
+        _replayLandingSection.value = section
     }
 
     fun loadLyricsFor(song: Song, forceSource: LyricsSourceId? = null) {

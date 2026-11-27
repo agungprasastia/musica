@@ -358,16 +358,28 @@ class LibraryRepository(
         )
     }
 
-    suspend fun recordPlay(song: Song, listenedMs: Long) {
+    suspend fun startPlaySession(
+        song: Song,
+        playedAtMs: Long = System.currentTimeMillis(),
+        initialListenedMs: Long = 0L,
+    ): Long {
         upsertSongMetadata(song)
-        db.historyDao().insert(
+        return db.historyDao().insert(
             PlayHistoryEntity(
                 videoId = song.videoId,
-                playedAtMs = System.currentTimeMillis(),
-                listenedDurationMs = listenedMs,
+                playedAtMs = playedAtMs,
+                listenedDurationMs = initialListenedMs.coerceAtLeast(0L),
             ),
         )
     }
+
+    suspend fun updatePlaySessionDuration(historyRowId: Long, listenedMs: Long) {
+        if (historyRowId <= 0L) return
+        db.historyDao().updateDuration(historyRowId, listenedMs.coerceAtLeast(0L))
+    }
+
+    suspend fun recordPlay(song: Song, listenedMs: Long): Long =
+        startPlaySession(song = song, initialListenedMs = listenedMs)
 
     suspend fun clearHistory() {
         db.historyDao().clearAll()

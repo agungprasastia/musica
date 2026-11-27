@@ -59,7 +59,7 @@ fun HistoryScreen(
     var confirmClear by remember { mutableStateOf(false) }
     val screenHazeState = rememberHazeState()
 
-    val startOfToday = remember {
+    val startOfToday = remember(events.firstOrNull()?.playedAtMs) {
         Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
         }.timeInMillis

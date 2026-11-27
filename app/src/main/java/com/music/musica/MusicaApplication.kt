@@ -44,6 +44,7 @@ import com.music.musica.data.stream.StreamResolver
 import com.music.musica.playback.AutoplayController
 import com.music.musica.playback.LastPlayedStore
 import com.music.musica.playback.MusicaPlaybackService
+import com.music.musica.playback.PlayHistorySessionTracker
 import com.music.musica.playback.PlayerController
 import com.music.musica.playback.SleepTimerManager
 import kotlinx.coroutines.CoroutineScope
@@ -211,6 +212,34 @@ class AppContainer(context: Context) {
             playerController.updateSleepTimerUi(state.remainingMs, state.stopAfterCurrentTrack)
         },
     )
+
+    val playHistorySessionTracker: PlayHistorySessionTracker = PlayHistorySessionTracker(
+        onInsertSession = { song, playedAtMs, initialMs ->
+            libraryRepository.startPlaySession(song, playedAtMs, initialMs)
+        },
+        onUpdateDuration = { rowId, listenedMs ->
+            libraryRepository.updatePlaySessionDuration(rowId, listenedMs)
+        },
+    )
+
+    fun onTrackSessionStarted(sessionToken: Long, song: Song) {
+        appScope.launch {
+            runCatching { playHistorySessionTracker.onSessionStarted(sessionToken, song) }
+        }
+    }
+
+    fun onTrackSessionProgress(sessionToken: Long, song: Song, listenedMs: Long, finalize: Boolean) {
+        appScope.launch {
+            runCatching {
+                playHistorySessionTracker.onSessionProgress(
+                    sessionToken = sessionToken,
+                    song = song,
+                    listenedMs = listenedMs,
+                    finalize = finalize,
+                )
+            }
+        }
+    }
 
     fun onTrackPlayed(song: Song, listenedMs: Long) {
         appScope.launch {

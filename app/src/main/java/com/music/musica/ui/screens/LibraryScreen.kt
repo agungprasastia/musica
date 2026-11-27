@@ -1,27 +1,21 @@
 package com.music.musica.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
@@ -36,7 +30,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.History
@@ -65,20 +58,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.music.musica.R
 import com.music.musica.core.model.HomeShelf
 import com.music.musica.core.model.ShelfItem
 import com.music.musica.core.model.Song
 import com.music.musica.core.model.UserPlaylist
+import com.music.musica.data.repository.ReplayPassSection
 import com.music.musica.data.repository.ReplaySummary
 import com.music.musica.ui.components.AnimatedSignInBanner
 import com.music.musica.ui.components.ArtworkImage
 import com.music.musica.ui.components.FrostedCircleButton
 import com.music.musica.ui.components.GlassDialogButton
+import com.music.musica.ui.components.LibraryReplayPassCarousel
 import com.music.musica.ui.components.LiquidGlassDialog
 import com.music.musica.ui.components.LiquidGlassSheet
-import com.music.musica.ui.components.MeshGradientBackground
 import com.music.musica.ui.components.ShelfSection
 import com.music.musica.ui.components.SongRow
 import com.music.musica.ui.components.TopFadeBlur
@@ -86,7 +79,6 @@ import com.music.musica.ui.components.glassCard
 import com.music.musica.ui.components.glassContentColor
 import com.music.musica.ui.components.lightweightGlass
 import com.music.musica.ui.theme.MusicaAccentRed
-import com.music.musica.ui.theme.OnboardingMeshColors
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
@@ -94,7 +86,7 @@ import dev.chrisbanes.haze.rememberHazeState
 /**
  * Musica LibraryScreen featuring:
  * - Bold 34sp displayLarge heading + floating circular Frosted '+' button
- * - Horizontal ReplayCreditCard (300dp, 1.586:1 ISO credit-card proportion) with static mesh art
+ * - Horizontal snapping 4-card Listening Pass Carousel (ISO 1.586:1 ratio, artwork-sampled mesh, embossed typography)
  * - Clean 54dp iOS LibraryLinkList with leading icons, counts, chevrons & inset dividers
  * - Local playlists with long-press Pin/Unpin + New Playlist card + Pull-to-Refresh + AnimatedSignInBanner
  */
@@ -105,6 +97,8 @@ fun LibraryScreen(
     playlists: List<UserPlaylist>,
     remoteLibraryShelves: List<HomeShelf>,
     replaySummary: ReplaySummary,
+    listenerName: String? = null,
+    memberSinceMs: Long? = null,
     downloadedCount: Int,
     isSignedIn: Boolean,
     activeVideoId: String?,
@@ -123,7 +117,7 @@ fun LibraryScreen(
     onPlaylistLongClick: ((UserPlaylist) -> Unit)? = null,
     onOpenDownloads: () -> Unit,
     onOpenHistory: () -> Unit,
-    onOpenReplay: () -> Unit,
+    onOpenReplay: (ReplayPassSection) -> Unit,
     onOpenLogin: () -> Unit,
     onItemClick: (ShelfItem) -> Unit,
     onBrowseLongClick: ((ShelfItem) -> Unit)? = null,
@@ -184,21 +178,16 @@ fun LibraryScreen(
                     }
                 }
 
-                // Signature ISO Credit-Card Ratio Replay Hero Card (symmetric full-width alignment)
+                // Signature ISO 1.586:1 Horizontal Snapping Listening Pass Carousel
                 item(key = "lib_replay_carousel") {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                            .padding(bottom = 18.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        ReplayCreditCard(
-                            replaySummary = replaySummary,
-                            reduceAnimation = reduceAnimation,
-                            onClick = onOpenReplay,
-                        )
-                    }
+                    LibraryReplayPassCarousel(
+                        summary = replaySummary,
+                        listenerName = listenerName,
+                        memberSinceMs = memberSinceMs,
+                        reduceAnimation = reduceAnimation,
+                        onOpenReplay = onOpenReplay,
+                        modifier = Modifier.padding(bottom = 16.dp),
+                    )
                 }
 
                 // Clean iOS 54dp Liquid Glass Link List with inset dividers
@@ -415,89 +404,6 @@ fun LibraryScreen(
             onDismiss = { showCreateDialog = false },
         )
     }
-    }
-}
-
-/**
- * ISO 1.586:1 credit-card-proportioned Replay hero card in Library.
- */
-@Composable
-private fun ReplayCreditCard(
-    replaySummary: ReplaySummary,
-    reduceAnimation: Boolean,
-    onClick: () -> Unit,
-) {
-    val shape = RoundedCornerShape(20.dp)
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .widthIn(max = 420.dp)
-            .aspectRatio(1.586f)
-            .clip(shape)
-            .border(0.75.dp, Color.White.copy(alpha = 0.20f), shape)
-            .clickable(onClick = onClick),
-    ) {
-        MeshGradientBackground(
-            colors = OnboardingMeshColors,
-            driftKey = "replay_card",
-            reduceAnimation = reduceAnimation,
-            scrimAlpha = 0.18f,
-            modifier = Modifier.matchParentSize(),
-        )
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(20.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Icon(
-                        imageVector = Icons.Rounded.AutoAwesome,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Text(
-                        text = stringResource(R.string.replay_title),
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = Color.White,
-                    )
-                }
-                Text(
-                    text = stringResource(R.string.replay_this_month),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.78f),
-                )
-            }
-
-            Column {
-                val totalMinutes = (replaySummary.totalListenedMs / 60_000L).toInt()
-                Text(
-                    text = stringResource(R.string.replay_card_stats, totalMinutes, replaySummary.totalTracksPlayed),
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                    ),
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(4.dp))
-                val topArtist = replaySummary.topArtists.firstOrNull()?.name
-                Text(
-                    text = topArtist?.let { "#1 $it" } ?: stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.78f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
     }
 }
 

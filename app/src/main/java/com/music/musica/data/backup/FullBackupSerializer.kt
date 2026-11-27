@@ -132,19 +132,20 @@ object FullBackupSerializer {
         HttpClients.json.encodeToString(backup)
 
     fun parse(rawJson: String): ParsedBackup {
-        val element = HttpClients.json.parseToJsonElement(rawJson)
+        val cleaned = rawJson.removePrefix("\uFEFF").trim()
+        val element = HttpClients.json.parseToJsonElement(cleaned)
         val obj = element as? JsonObject
             ?: throw IllegalArgumentException("Backup JSON must be an object")
 
         val version = (obj["schemaVersion"] as? JsonPrimitive)?.intOrNull
         return if ((version != null && version >= MusicaBackupV2.SCHEMA_VERSION) || obj.containsKey("settings")) {
-            val v2 = HttpClients.json.decodeFromString<MusicaBackupV2>(rawJson)
+            val v2 = HttpClients.json.decodeFromString<MusicaBackupV2>(cleaned)
             ParsedBackup.FullV2(v2)
         } else {
             if (obj.keys.none { it in KNOWN_V1_SETTINGS_KEYS }) {
                 throw IllegalArgumentException("Unrecognized backup JSON format")
             }
-            val v1Settings = HttpClients.json.decodeFromString<UserSettings>(rawJson)
+            val v1Settings = HttpClients.json.decodeFromString<UserSettings>(cleaned)
             ParsedBackup.SettingsOnlyV1(v1Settings)
         }
     }
