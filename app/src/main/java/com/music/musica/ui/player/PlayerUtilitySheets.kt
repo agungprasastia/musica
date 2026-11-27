@@ -20,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -153,8 +154,9 @@ fun SleepTimerSheet(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    val roundedMin = customMinutes.roundToInt()
                     Text(
-                        text = stringResource(R.string.player_sleep_minutes, customMinutes.roundToInt()),
+                        text = pluralStringResource(R.plurals.player_sleep_minutes, roundedMin, roundedMin),
                         style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                         color = fg,
                     )
@@ -208,7 +210,7 @@ fun SleepTimerSheet(
             presets.forEach { min ->
                 val isSelected = !stopAfterTrack && activeMinutes == min
                 LiquidGlassMenuRow(
-                    label = stringResource(R.string.player_sleep_minutes, min),
+                    label = pluralStringResource(R.plurals.player_sleep_minutes, min, min),
                     selected = isSelected,
                     onClick = { onSelectMinutes(min); onDismiss() },
                 )

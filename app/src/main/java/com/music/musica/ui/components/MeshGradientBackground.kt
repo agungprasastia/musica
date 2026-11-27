@@ -36,6 +36,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import coil3.SingletonImageLoader
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
@@ -69,8 +71,8 @@ fun PlayerBackdrop(
     meshColors: List<Color>,
     theme: PlayerTheme,
     reduceAnimation: Boolean,
-    dimMore: Boolean = false,
     modifier: Modifier = Modifier,
+    dimMore: Boolean = false,
 ) {
     val scrim = if (dimMore) 0.44f else 0.24f
     when (theme) {
@@ -222,10 +224,10 @@ private fun SimpleBlurredBackdrop(
  * typography legibility, upscales to 32x32, and runs a fast 3-pass separable box blur on CPU.
  */
 private fun buildArtworkMeshTexture(source: Bitmap): Bitmap {
-    val grid = Bitmap.createScaledBitmap(source, 6, 6, true)
+    val grid = source.scale(6, 6)
     val w = 32
     val h = 32
-    val upscaled = Bitmap.createScaledBitmap(grid, w, h, true)
+    val upscaled = grid.scale(w, h)
     grid.recycle()
 
     val pixels = IntArray(w * h)
@@ -249,7 +251,7 @@ private fun buildArtworkMeshTexture(source: Bitmap): Bitmap {
         boxBlurVertical(tmp, pixels, w, h, radius)
     }
 
-    return Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).apply {
+    return createBitmap(w, h).apply {
         setPixels(pixels, 0, w, 0, 0, w, h)
     }
 }
@@ -318,6 +320,7 @@ fun rememberCyclingMeshColors(
  */
 @Composable
 fun MeshGradientBackground(
+    modifier: Modifier = Modifier,
     colors: List<Color> = DefaultMeshDarkColors,
     driftKey: Any = Unit,
     reduceAnimation: Boolean = false,
@@ -327,7 +330,6 @@ fun MeshGradientBackground(
     colorFadeMillis: Int = 1_400,
     blurRadius: Dp = 56.dp,
     scrimAlpha: Float = 0.24f,
-    modifier: Modifier = Modifier,
 ) {
     val tuned = remember(colors) {
         val base = if (colors.size >= 4) colors.take(4) else (colors + DefaultMeshDarkColors).take(4)

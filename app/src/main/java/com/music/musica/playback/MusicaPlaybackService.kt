@@ -158,10 +158,10 @@ class MusicaPlaybackService : MediaSessionService() {
             val customCommands = base.availableSessionCommands.buildUpon().apply {
                 MusicaSessionCommands.ALL_COMMANDS.forEach { add(it) }
             }.build()
-            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
-                .setAvailableSessionCommands(customCommands)
-                .setAvailablePlayerCommands(base.availablePlayerCommands)
-                .build()
+            return MediaSession.ConnectionResult.accept(
+                customCommands,
+                base.availablePlayerCommands,
+            )
         }
 
         override fun onCustomCommand(

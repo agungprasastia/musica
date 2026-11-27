@@ -25,6 +25,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -53,6 +55,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -201,7 +204,7 @@ fun LibraryScreen(
                         LibraryLinkRow(
                             icon = Icons.Rounded.DownloadDone,
                             title = stringResource(R.string.library_downloads),
-                            trailing = stringResource(R.string.library_songs_count, downloadedCount),
+                            trailing = pluralStringResource(R.plurals.library_songs_count, downloadedCount, downloadedCount),
                             onClick = onOpenDownloads,
                         )
                         HorizontalDivider(
@@ -224,7 +227,7 @@ fun LibraryScreen(
                             icon = Icons.Rounded.Favorite,
                             iconTint = MusicaAccentRed,
                             title = stringResource(R.string.library_liked_songs),
-                            trailing = stringResource(R.string.library_songs_count, likedSongs.size),
+                            trailing = pluralStringResource(R.plurals.library_songs_count, likedSongs.size, likedSongs.size),
                             onClick = { if (likedSongs.isNotEmpty()) onPlayLiked(0) },
                         )
                     }
@@ -332,7 +335,7 @@ fun LibraryScreen(
                                     )
                                 }
                                 Text(
-                                    text = stringResource(R.string.library_songs_count, playlist.songCount),
+                                    text = pluralStringResource(R.plurals.library_songs_count, playlist.songCount, playlist.songCount),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -459,7 +462,8 @@ fun CreatePlaylistDialog(
     onCreate: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var name by remember { mutableStateOf("") }
+    val nameState = rememberTextFieldState()
+    val name = nameState.text.toString()
     val fg = glassContentColor()
     LiquidGlassDialog(
         hazeState = hazeState,
@@ -495,9 +499,8 @@ fun CreatePlaylistDialog(
                 )
             }
             BasicTextField(
-                value = name,
-                onValueChange = { name = it },
-                singleLine = true,
+                state = nameState,
+                lineLimits = TextFieldLineLimits.SingleLine,
                 textStyle = MaterialTheme.typography.bodyLarge.copy(color = fg),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 modifier = Modifier.fillMaxWidth(),
@@ -560,7 +563,7 @@ fun PlaylistPickerSheet(
                     Spacer(Modifier.width(14.dp))
                     Column {
                         Text(playlist.title, style = MaterialTheme.typography.titleMedium, color = fg)
-                        val countText = stringResource(R.string.library_songs_count, playlist.songCount)
+                        val countText = pluralStringResource(R.plurals.library_songs_count, playlist.songCount, playlist.songCount)
                         val meta = if (playlist.isRemoteYtm) {
                             "${stringResource(R.string.library_ytm_playlist_badge)} · $countText"
                         } else {

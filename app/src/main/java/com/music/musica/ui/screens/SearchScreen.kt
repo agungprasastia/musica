@@ -25,8 +25,11 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Close
@@ -120,6 +123,21 @@ fun SearchScreen(
     val keyboard = LocalSoftwareKeyboardController.current
     val currentLoadingMore by rememberUpdatedState(isLoadingMore)
     val currentOnLoadMore by rememberUpdatedState(onLoadMore)
+    val queryState = rememberTextFieldState(initialText = query)
+    val latestQuery by rememberUpdatedState(query)
+    val latestOnQueryChange by rememberUpdatedState(onQueryChange)
+    LaunchedEffect(query) {
+        if (queryState.text.toString() != query) {
+            queryState.setTextAndPlaceCursorAtEnd(query)
+        }
+    }
+    LaunchedEffect(queryState) {
+        snapshotFlow { queryState.text.toString() }
+            .distinctUntilChanged()
+            .collect { text ->
+                if (text != latestQuery) latestOnQueryChange(text)
+            }
+    }
     LaunchedEffect(listState, hasMore, query, filter) {
         if (!hasMore) return@LaunchedEffect
         snapshotFlow {
@@ -188,23 +206,26 @@ fun SearchScreen(
                         )
                     }
                     BasicTextField(
-                        value = query,
-                        onValueChange = onQueryChange,
-                        singleLine = true,
+                        state = queryState,
+                        lineLimits = TextFieldLineLimits.SingleLine,
                         textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
                         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(
-                            onSearch = {
-                                keyboard?.hide()
-                                onSubmitQuery(query)
-                            },
-                        ),
+                        onKeyboardAction = {
+                            keyboard?.hide()
+                            onSubmitQuery(queryState.text.toString())
+                        },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
                 if (query.isNotEmpty()) {
-                    IconButton(onClick = { onQueryChange("") }, modifier = Modifier.size(28.dp)) {
+                    IconButton(
+                        onClick = {
+                            queryState.clearText()
+                            onQueryChange("")
+                        },
+                        modifier = Modifier.size(28.dp),
+                    ) {
                         Icon(
                             imageVector = Icons.Rounded.Close,
                             contentDescription = stringResource(R.string.action_clear),

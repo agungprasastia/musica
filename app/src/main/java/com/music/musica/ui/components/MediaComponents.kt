@@ -102,9 +102,9 @@ fun ArtworkImage(
     url: String?,
     contentDescription: String?,
     size: Dp,
+    modifier: Modifier = Modifier,
     cornerRadius: Dp = 10.dp,
     circle: Boolean = false,
-    modifier: Modifier = Modifier,
 ) {
     val shape = if (circle) CircleShape else RoundedCornerShape(cornerRadius)
     val context = coil3.compose.LocalPlatformContext.current
@@ -165,16 +165,16 @@ fun ArtworkImage(
 @Composable
 fun SongRow(
     song: Song,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     isActive: Boolean = false,
     isPlaying: Boolean = true,
     isDownloaded: Boolean = false,
     indexNumber: Int? = null,
     showDivider: Boolean = false,
-    onClick: () -> Unit,
     onMoreClick: (() -> Unit)? = null,
     onPlayNext: (() -> Unit)? = null,
     onAddToQueue: (() -> Unit)? = null,
-    modifier: Modifier = Modifier,
 ) {
     val haptics = LocalHapticFeedback.current
     SwipeToQueueBox(
@@ -311,14 +311,14 @@ fun SongRow(
 @Composable
 fun CompactTrackRow(
     song: Song,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     isActive: Boolean = false,
     isPlaying: Boolean = true,
     isDownloaded: Boolean = false,
-    onClick: () -> Unit,
     onMoreClick: (() -> Unit)? = null,
     @Suppress("UNUSED_PARAMETER") onPlayNext: (() -> Unit)? = null,
     @Suppress("UNUSED_PARAMETER") onAddToQueue: (() -> Unit)? = null,
-    modifier: Modifier = Modifier,
 ) {
     val haptics = LocalHapticFeedback.current
     Row(
@@ -417,10 +417,10 @@ fun PagedTrackCarousel(
     downloadedIds: Set<String>,
     onTrackClick: (Song, Int) -> Unit,
     onSongMore: (Song) -> Unit,
+    modifier: Modifier = Modifier,
     onPlayNext: ((Song) -> Unit)? = null,
     onAddToQueue: ((Song) -> Unit)? = null,
     rowsPerPage: Int = 4,
-    modifier: Modifier = Modifier,
 ) {
     if (tracks.isEmpty()) return
     val pages = remember(tracks, rowsPerPage) { tracks.chunked(rowsPerPage) }
@@ -467,11 +467,11 @@ fun PagedTrackCarousel(
 @Composable
 fun MediaCard(
     item: ShelfItem,
-    isActive: Boolean = false,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    isActive: Boolean = false,
     onLongClick: (() -> Unit)? = null,
     cardWidth: Dp = 150.dp,
-    modifier: Modifier = Modifier,
 ) {
     val isArtist = item is ShelfItem.Artist
     val haptics = LocalHapticFeedback.current
@@ -538,10 +538,10 @@ fun MediaCard(
 @Composable
 fun VideoShelfCard(
     item: ShelfItem,
-    isActive: Boolean = false,
     onClick: () -> Unit,
-    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    isActive: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val haptics = LocalHapticFeedback.current
     val shape = RoundedCornerShape(12.dp)
@@ -988,9 +988,9 @@ fun SongActionsSheet(
 private fun QuickActionTile(
     icon: ImageVector,
     label: String,
-    tint: Color = glassContentColor(),
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    tint: Color = glassContentColor(),
 ) {
     Column(
         modifier = modifier

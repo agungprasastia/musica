@@ -505,10 +505,10 @@ fun LiquidGlassDialog(
 fun GlassDialogButton(
     text: String,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     enabled: Boolean = true,
     primary: Boolean = false,
     destructive: Boolean = false,
-    modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(percent = 50)
     val containerColor = when {
@@ -722,8 +722,8 @@ fun FloatingBarsTapGuard(
 fun TopFadeBlur(
     @Suppress("UNUSED_PARAMETER") hazeState: HazeState,
     @Suppress("UNUSED_PARAMETER") frostedGlassEnabled: Boolean,
-    extraHeight: Dp = 18.dp,
     modifier: Modifier = Modifier,
+    extraHeight: Dp = 18.dp,
 ) {
     val bg = MaterialTheme.colorScheme.background
     val gradient = remember(bg) {

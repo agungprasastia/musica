@@ -25,7 +25,6 @@
     <string name="onboarding_continue_guest">Lewati dulu</string>
     <string name="onboarding_connect_title">Personalisasi Berandamu</string>
     <string name="onboarding_connect_subtitle">Masuk ke YouTube Music untuk menyinkronkan rekomendasi Beranda, Lagu Disukai, dan playlist—atau lewati kapan saja.</string>
-    <string name="onboarding_skip">Lewati dulu</string>
     <string name="auth_login_title">Masuk ke YouTube Music</string>
     <string name="auth_guest_mode">Mode Tamu</string>
     <string name="auth_signed_in_as">Masuk sebagai %1$s</string>
@@ -41,7 +40,6 @@
     <string name="action_previous">Sebelumnya</string>
     <string name="action_retry">Coba Lagi</string>
     <string name="action_cancel">Batal</string>
-    <string name="action_done">Selesai</string>
     <string name="action_save">Simpan</string>
     <string name="action_saved">Tersimpan</string>
     <string name="action_like">Suka</string>
@@ -54,20 +52,13 @@
     <string name="action_back">Kembali</string>
     <string name="action_more">Lainnya</string>
     <string name="action_show_all">Lihat Semua</string>
-    <string name="state_loading">Memuat…</string>
     <string name="musica_empty_state">Belum ada konten</string>
     <string name="state_error_generic">Terjadi kesalahan. Silakan coba lagi.</string>
-    <string name="state_offline">Kamu sedang offline</string>
 
     <!-- Home / Explore / Mixes -->
-    <string name="home_greeting_morning">Selamat pagi</string>
-    <string name="home_greeting_afternoon">Selamat siang</string>
-    <string name="home_greeting_evening">Selamat malam</string>
-    <string name="home_quick_picks">Pilihan Cepat</string>
     <string name="home_top_picks">Pilihan Utama untuk Kamu</string>
     <string name="home_recently_played">Baru Diputar</string>
     <string name="explore_title">Jelajah</string>
-    <string name="explore_moods_genres">Suasana &amp; Genre</string>
     <string name="mixes_title">Mix</string>
     <string name="mixes_subtitle">Stasiun pilihan dan mix tanpa henti</string>
     <string name="mixes_for_you">Dibuat untuk Kamu</string>
@@ -91,15 +82,14 @@
     <string name="library_title">Koleksi</string>
     <string name="library_liked_songs">Lagu Disukai</string>
     <string name="library_playlists">Playlist</string>
-    <string name="library_albums">Album</string>
-    <string name="library_artists">Artis</string>
     <string name="library_downloads">Unduhan</string>
     <string name="library_history">Riwayat</string>
-    <string name="library_replay">Replay</string>
     <string name="library_new_playlist">Playlist Baru</string>
     <string name="library_playlist_name_hint">Nama playlist</string>
     <string name="library_add_to_playlist">Tambah ke Playlist</string>
-    <string name="library_songs_count">%1$d lagu</string>
+    <plurals name="library_songs_count">
+        <item quantity="other">%1$d lagu</item>
+    </plurals>
 
     <!-- Song Actions Menu -->
     <string name="menu_play_next">Putar Berikutnya</string>
@@ -111,7 +101,6 @@
     <string name="menu_undislike">Batalkan Tidak Suka</string>
     <string name="menu_add_playlist">Tambah ke Playlist</string>
     <string name="menu_download">Unduh Offline</string>
-    <string name="menu_remove_download">Hapus Unduhan</string>
     <string name="menu_download_all">Unduh Semua</string>
     <string name="menu_save_to_library">Simpan ke Koleksi</string>
     <string name="menu_remove_from_library">Hapus dari Koleksi</string>
@@ -136,31 +125,27 @@
     <string name="toast_playlist_deleted">Playlist dihapus</string>
 
     <!-- Player & Now Playing -->
-    <string name="player_now_playing">Sedang Diputar</string>
     <string name="player_queue">Berikutnya</string>
     <string name="player_lyrics">Lirik</string>
     <string name="player_autoplay">Putar Otomatis</string>
     <string name="player_autoplay_subtitle">Lanjutkan lagu serupa saat antrean habis</string>
-    <string name="player_nothing_playing">Tidak Ada Lagu</string>
     <string name="player_speed_title">Kecepatan Putar</string>
     <string name="player_sleep_timer">Pengatur Waktu Tidur</string>
     <string name="player_sleep_off">Mati</string>
     <string name="player_sleep_end_of_track">Berhenti setelah lagu ini</string>
-    <string name="player_sleep_minutes">%1$d menit</string>
+    <plurals name="player_sleep_minutes">
+        <item quantity="other">%1$d menit</item>
+    </plurals>
     <string name="player_sleep_remaining">Berhenti dalam %1$s</string>
     <string name="player_equalizer">Equalizer</string>
     <string name="player_equalizer_unavailable">Equalizer sistem tidak tersedia di perangkat ini</string>
 
     <!-- Lyrics -->
-    <string name="lyrics_loading">Mencari lirik…</string>
     <string name="lyrics_unavailable">Lirik tidak tersedia untuk lagu ini</string>
     <string name="lyrics_source_label">Sumber: %1$s</string>
     <string name="lyrics_offset_title">Penyesuaian Waktu Lirik</string>
     <string name="lyrics_offset_reset">Reset</string>
     <string name="lyrics_provider_title">Penyedia Lirik</string>
-    <string name="lyrics_word_synced">Sinkron per kata</string>
-    <string name="lyrics_line_synced">Sinkron per baris</string>
-    <string name="lyrics_plain">Teks biasa</string>
 
     <!-- Stats for Nerds -->
     <string name="stats_title">Statistik Teknis</string>
@@ -186,15 +171,15 @@
     <string name="replay_title">Replay</string>
     <string name="replay_this_month">Bulan Ini</string>
     <string name="replay_this_year">Tahun Ini</string>
-    <string name="replay_all_time">Sepanjang Waktu</string>
     <string name="replay_period_all_tab">Semua</string>
     <string name="replay_minutes_listened">Menit Didengar</string>
     <string name="replay_tracks_played">Lagu Diputar</string>
     <string name="replay_top_songs">Lagu Teratas</string>
     <string name="replay_top_artists">Artis Teratas</string>
     <string name="replay_top_albums">Album Teratas</string>
-    <string name="replay_plays_count">%1$d kali diputar</string>
-    <string name="replay_card_stats">%1$d mnt · %2$d putaran</string>
+    <plurals name="replay_plays_count">
+        <item quantity="other">%1$d kali diputar</item>
+    </plurals>
     <string name="replay_pass_eyebrow">Pengalaman mendengarkan Anda</string>
     <string name="replay_pass_minutes_kicker">Menit didengar</string>
     <string name="replay_pass_top_song_kicker">Lagu teratas</string>
@@ -231,11 +216,12 @@
     <string name="downloads_tab_tracks">Lagu</string>
     <string name="downloads_tab_collections">Koleksi</string>
     <string name="downloads_singles_collection">Lagu Satuan</string>
-    <string name="downloads_collection_summary">%1$d dari %2$d lagu • %3$s</string>
+    <plurals name="downloads_collection_summary">
+        <item quantity="other">%1$d dari %2$d lagu • %3$s</item>
+    </plurals>
     <string name="downloads_status_queued">Antre</string>
     <string name="downloads_status_waiting_wifi">Menunggu Wi-Fi…</string>
     <string name="downloads_status_downloading">Mengunduh %1$d%%</string>
-    <string name="downloads_status_completed">Terunduh</string>
     <string name="downloads_status_failed">Gagal</string>
     <string name="downloads_notification_channel">Unduhan Offline</string>
     <string name="downloads_notification_progress">Mengunduh %1$d dari %2$d — %3$d%%</string>
@@ -287,16 +273,13 @@
 
     <string name="settings_lyrics_prefer_word">Prioritaskan Lirik Per Kata</string>
     <string name="settings_lyrics_prefer_word_desc">Tetap cari penyedia dengan sinkronisasi kata/suku kata</string>
-    <string name="settings_lyrics_providers">Penyedia Lirik</string>
 
     <string name="settings_clear_audio_cache">Bersihkan Cache Audio</string>
     <string name="settings_clear_image_cache">Cache Gambar</string>
     <string name="settings_cache_cleared">Cache dibersihkan</string>
 
     <string name="settings_app_language">Bahasa Aplikasi</string>
-    <string name="language_system">Default Sistem</string>
     <string name="language_english">English</string>
-    <string name="language_indonesian">Bahasa Indonesia</string>
 
     <string name="settings_version">Versi %1$s</string>
     <string name="settings_about_disclaimer">Musica adalah klien YouTube Music open-source independen dan tidak berafiliasi dengan Google LLC maupun YouTube.</string>

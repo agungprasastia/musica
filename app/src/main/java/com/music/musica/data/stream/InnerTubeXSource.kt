@@ -2,6 +2,7 @@ package com.music.musica.data.stream
 
 import android.content.Context
 import android.util.Log
+import androidx.core.content.edit
 import com.metrolist.innertubex.InnerTube
 import com.metrolist.innertubex.InnerTubeLogger
 import com.metrolist.innertubex.cipher.PlayerConfigRepository
@@ -49,16 +50,16 @@ class InnerTubeXSource(
         override val defaultSourceUrl: String = DEFAULT_CONFIG_URL
         override var cachedJson: String
             get() = prefs.getString("json", "").orEmpty()
-            set(value) { prefs.edit().putString("json", value).apply() }
+            set(value) { prefs.edit { putString("json", value) } }
         override var cachedAtMs: Long
             get() = prefs.getLong("cached_at", 0L)
-            set(value) { prefs.edit().putLong("cached_at", value).apply() }
+            set(value) { prefs.edit { putLong("cached_at", value) } }
         override var cachedSourceUrl: String
             get() = prefs.getString("source_url", "").orEmpty()
-            set(value) { prefs.edit().putString("source_url", value).apply() }
+            set(value) { prefs.edit { putString("source_url", value) } }
         override var cachedEtag: String
             get() = prefs.getString("etag", "").orEmpty()
-            set(value) { prefs.edit().putString("etag", value).apply() }
+            set(value) { prefs.edit { putString("etag", value) } }
     }
 
     private val innerTube = InnerTube(HttpClients.ktor, logger = logger)

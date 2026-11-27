@@ -117,7 +117,7 @@ abstract class StripNewPipeUtilsJarTask : DefaultTask() {
     }
 }
 
-val newPipeExtractorRaw: Configuration by configurations.creating {
+val newPipeExtractorRaw = configurations.create("newPipeExtractorRaw") {
     isTransitive = false
     isCanBeConsumed = false
 }

@@ -4,6 +4,7 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import androidx.core.content.edit
 import com.music.musica.core.model.AccountProfile
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -49,7 +50,7 @@ class KeystoreAuthStore(context: Context) {
     fun saveSession(session: GoogleSession) {
         val raw = json.encodeToString(session)
         val encrypted = encrypt(raw)
-        prefs.edit().putString(KEY_SESSION, encrypted).apply()
+        prefs.edit { putString(KEY_SESSION, encrypted) }
         _session.value = session
     }
 
@@ -59,7 +60,7 @@ class KeystoreAuthStore(context: Context) {
     }
 
     fun saveVisitorData(visitorData: String) {
-        prefs.edit().putString(KEY_VISITOR_DATA, visitorData).apply()
+        prefs.edit { putString(KEY_VISITOR_DATA, visitorData) }
     }
 
     fun getVisitorData(): String? =
@@ -67,7 +68,7 @@ class KeystoreAuthStore(context: Context) {
             ?: prefs.getString(KEY_VISITOR_DATA, null)?.takeIf { it.isNotBlank() }
 
     fun clearSession() {
-        prefs.edit().remove(KEY_SESSION).apply()
+        prefs.edit { remove(KEY_SESSION) }
         _session.value = null
     }
 

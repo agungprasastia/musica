@@ -82,10 +82,10 @@ private const val PAGE_CONNECT = 1
 @Composable
 fun OnboardingScreen(
     reduceAnimation: Boolean,
-    isSignedIn: Boolean = false,
     onSignInWithGoogle: () -> Unit,
     onContinueGuest: () -> Unit,
     modifier: Modifier = Modifier,
+    isSignedIn: Boolean = false,
 ) {
     var page by rememberSaveable { mutableIntStateOf(PAGE_WELCOME) }
 

@@ -107,8 +107,8 @@ fun FloatingGlassNavBar(
     hazeState: HazeState,
     frostedGlassEnabled: Boolean,
     onSelectTab: (Int) -> Unit,
-    onActiveTabTap: (Int) -> Unit = {},
     modifier: Modifier = Modifier,
+    onActiveTabTap: (Int) -> Unit = {},
 ) {
     if (tabs.isEmpty()) return
     val haptics = LocalHapticFeedback.current

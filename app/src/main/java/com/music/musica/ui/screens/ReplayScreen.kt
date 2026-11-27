@@ -197,7 +197,7 @@ fun ReplayScreen(
                         }
                         Spacer(Modifier.width(10.dp))
                         Text(
-                            text = stringResource(R.string.replay_plays_count, ranked.playCount),
+                            text = pluralStringResource(R.plurals.replay_plays_count, ranked.playCount, ranked.playCount),
                             style = MaterialTheme.typography.labelMedium,
                             color = Color.White.copy(alpha = 0.80f),
                         )
@@ -249,7 +249,7 @@ fun ReplayScreen(
                         )
                         Spacer(Modifier.width(10.dp))
                         Text(
-                            text = stringResource(R.string.replay_plays_count, artist.playCount),
+                            text = pluralStringResource(R.plurals.replay_plays_count, artist.playCount, artist.playCount),
                             style = MaterialTheme.typography.labelMedium,
                             color = Color.White.copy(alpha = 0.75f),
                         )
@@ -308,7 +308,7 @@ fun ReplayScreen(
                         }
                         Spacer(Modifier.width(10.dp))
                         Text(
-                            text = stringResource(R.string.replay_plays_count, album.playCount),
+                            text = pluralStringResource(R.plurals.replay_plays_count, album.playCount, album.playCount),
                             style = MaterialTheme.typography.labelMedium,
                             color = Color.White.copy(alpha = 0.80f),
                         )

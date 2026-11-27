@@ -139,8 +139,8 @@ fun Modifier.thumbnailBorder(shape: Shape): Modifier {
  */
 @Composable
 fun ExplicitBadge(
-    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     modifier: Modifier = Modifier,
+    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
 ) {
     Box(
         modifier = modifier
@@ -180,9 +180,9 @@ fun ExplicitSongTitle(
     isExplicit: Boolean,
     style: TextStyle,
     color: Color,
+    modifier: Modifier = Modifier,
     badgeTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     fadeOverflow: Boolean = false,
-    modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier,
@@ -220,8 +220,8 @@ fun FadingLine(
     text: String,
     style: TextStyle,
     color: Color,
-    fadeWidth: Dp = 32.dp,
     modifier: Modifier = Modifier,
+    fadeWidth: Dp = 32.dp,
 ) {
     var overflows by remember(text) { mutableStateOf(false) }
     val density = LocalDensity.current
@@ -263,9 +263,9 @@ fun FadingLine(
  */
 @Composable
 fun AnimatedPlayingBars(
+    modifier: Modifier = Modifier,
     isPlaying: Boolean = true,
     color: Color = Color.White,
-    modifier: Modifier = Modifier,
 ) {
     val transition = rememberInfiniteTransition(label = "playing_bars")
     val phase by transition.animateFloat(
@@ -503,8 +503,8 @@ fun PillSegmentedControl(
     options: List<String>,
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
-    onDarkBackdrop: Boolean = false,
     modifier: Modifier = Modifier,
+    onDarkBackdrop: Boolean = false,
 ) {
     if (options.isEmpty()) return
     val glassEnabled = LocalLiquidGlassEnabled.current
@@ -598,10 +598,10 @@ fun PillSegmentedControl(
  */
 @Composable
 fun SwipeToQueueBox(
+    modifier: Modifier = Modifier,
     enabled: Boolean = true,
     onPlayNext: (() -> Unit)? = null,
     onAddToQueue: (() -> Unit)? = null,
-    modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     if (!enabled || (onPlayNext == null && onAddToQueue == null)) {
@@ -711,13 +711,13 @@ fun SwipeToQueueBox(
 fun FrostedCircleButton(
     icon: ImageVector,
     contentDescription: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     hazeState: HazeState? = null,
     frostedGlassEnabled: Boolean = LocalLiquidGlassEnabled.current,
     liveBlur: Boolean = false,
     onDarkBackdrop: Boolean = false,
-    onClick: () -> Unit,
     tint: Color = if (onDarkBackdrop) Color.White else if (frostedGlassEnabled) glassContentColor() else MaterialTheme.colorScheme.onSurface,
-    modifier: Modifier = Modifier,
 ) {
     Box(
         modifier = modifier
@@ -753,13 +753,13 @@ fun FrostedCircleButton(
 fun ThinSlider(
     value: Float,
     onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
     onValueChangeFinished: () -> Unit = {},
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
     activeColor: Color = Color.White,
     inactiveColor: Color = Color.White.copy(alpha = 0.24f),
     restHeight: Dp = 6.dp,
     dragHeight: Dp = 11.dp,
-    modifier: Modifier = Modifier,
 ) {
     var dragging by remember { mutableStateOf(false) }
     val trackHeight by animateDpAsState(
@@ -828,8 +828,8 @@ fun AnimatedSignInBanner(
     title: String,
     subtitle: String,
     onSignIn: () -> Unit,
-    reduceAnimation: Boolean = false,
     modifier: Modifier = Modifier,
+    reduceAnimation: Boolean = false,
 ) {
     val shape = RoundedCornerShape(22.dp)
     var pressed by remember { mutableStateOf(false) }

@@ -191,7 +191,6 @@ internal fun MusicaAppRoot(
     val onOpenBrowseMore: (ShelfItem) -> Unit = remember {
         { item: ShelfItem ->
             BrowseActionTarget.fromShelfItem(item)?.let { browseActionTarget = it }
-            Unit
         }
     }
 
