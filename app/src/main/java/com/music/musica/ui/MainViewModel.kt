@@ -9,6 +9,7 @@ import com.music.musica.MusicaApplication
 import com.music.musica.core.auth.GoogleSession
 import com.music.musica.core.model.AlbumRef
 import com.music.musica.core.model.AppLanguage
+import com.music.musica.core.model.ArtistRef
 import com.music.musica.core.model.AudioQuality
 import com.music.musica.core.model.BrowseType
 import com.music.musica.core.model.DetailPage
@@ -22,6 +23,8 @@ import com.music.musica.core.model.SearchFilter
 import com.music.musica.core.model.ShelfItem
 import com.music.musica.core.model.Song
 import com.music.musica.core.model.ThemeMode
+import com.music.musica.core.model.TopPick
+import com.music.musica.core.model.TopPickKind
 import com.music.musica.core.model.UiState
 import com.music.musica.core.model.UserPlaylist
 import com.music.musica.core.network.HttpClients
@@ -31,8 +34,12 @@ import com.music.musica.data.lyrics.LyricsQuery
 import com.music.musica.data.lyrics.LyricsResult
 import com.music.musica.data.repository.ReplayPassSection
 import com.music.musica.data.repository.ReplaySummary
+import com.music.musica.data.repository.StoredTopPicks
+import com.music.musica.data.repository.TopPicksCacheStore
+import com.music.musica.data.repository.TopPicksEngine
 import com.music.musica.ui.components.BrowseActionTarget
 import com.music.musica.ui.navigation.AppNavigator
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -43,6 +50,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -50,7 +58,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicLong
 
 data class DetailStackEntry(
     val browseId: String,
@@ -90,6 +100,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val homeRefreshing: StateFlow<Boolean> = _homeRefreshing.asStateFlow()
     private var homeContinuation: String? = null
     private var loadingMoreHome = false
+
+    // ---- Top Picks for You ----
+    private val _topPicks = MutableStateFlow<List<TopPick>?>(null)
+    val topPicks: StateFlow<List<TopPick>?> = _topPicks.asStateFlow()
+    private val _topPicksLoading = MutableStateFlow(false)
+    val topPicksLoading: StateFlow<Boolean> = _topPicksLoading.asStateFlow()
+    private val _activeTopPickLoadingKey = MutableStateFlow<String?>(null)
+    val activeTopPickLoadingKey: StateFlow<String?> = _activeTopPickLoadingKey.asStateFlow()
+    private var topPicksJob: Job? = null
+    private var topPicksSlotShown: String? = null
+    private var topPicksIdentityShown: String? = null
+    private val topPickPlayGeneration = AtomicLong(0L)
 
     private val _exploreState = MutableStateFlow<UiState<ExploreFeed>>(UiState.Loading)
     val exploreState: StateFlow<UiState<ExploreFeed>> = _exploreState.asStateFlow()
@@ -173,6 +195,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         container.playerController.connect()
         loadHome(isRefresh = false)
+        loadTopPicks(rebuild = false)
         refreshAccountProfileOnly()
         observeSearchSuggestions()
         observeCurrentTrackForLyrics()
@@ -234,6 +257,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 .onSuccess { page ->
                     homeContinuation = page.continuation
                     _homeState.value = UiState.Success(page.shelves)
+                    // If Top Picks previously built sparse (<=1 card) before Home arrived, enrich immediately.
+                    if (page.shelves.isNotEmpty() && _topPicks.value.orEmpty().size <= 1 && topPicksJob?.isActive != true) {
+                        loadTopPicks(rebuild = true)
+                    }
                 }
                 .onFailure { err ->
                     if (_homeState.value !is UiState.Success) {
@@ -241,6 +268,151 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             _homeRefreshing.value = false
+            // Top Picks keeps its hourly snapshot; only refresh if stale, empty, or fallback-only with new history.
+            if (isRefresh && topPicksJob?.isActive != true) {
+                loadTopPicks(rebuild = shouldRebuildFallbackPicks())
+            }
+        }
+    }
+
+    private fun topPicksIdentityKey(): String {
+        val cookie = container.authStore.currentCookie?.takeIf { it.isNotBlank() }
+        return if (cookie != null) "signed:${cookie.hashCode()}" else "guest"
+    }
+
+    private fun topPicksLanguageTag(): String =
+        settings.value.appLanguage.tag.ifBlank { Locale.getDefault().language }
+
+    private fun shouldRebuildFallbackPicks(): Boolean {
+        val current = _topPicks.value.orEmpty()
+        if (current.isEmpty()) return true
+        val onlyFallbackOrMood = current.all { it.isFallbackPick || it.kind == TopPickKind.MOOD }
+        return onlyFallbackOrMood && recentlyPlayedSongs.value.isNotEmpty()
+    }
+
+    fun refreshTopPicksIfStale() {
+        if (topPicksJob?.isActive == true) return
+        val identity = topPicksIdentityKey()
+        val currentSlot = TopPicksCacheStore.hourSlotOf()
+        val staleHour = topPicksSlotShown != null && topPicksSlotShown != currentSlot
+        val identityChanged = topPicksIdentityShown != null && topPicksIdentityShown != identity
+        if (staleHour || identityChanged || shouldRebuildFallbackPicks()) {
+            loadTopPicks(rebuild = identityChanged || shouldRebuildFallbackPicks())
+        }
+    }
+
+    fun loadTopPicks(rebuild: Boolean = false) {
+        topPicksJob?.cancel()
+        val identity = topPicksIdentityKey()
+        val langTag = topPicksLanguageTag()
+        val slot = TopPicksCacheStore.hourSlotOf()
+        topPicksJob = viewModelScope.launch {
+            val stored = container.topPicksCacheStore.load()
+                ?.takeIf { it.identity == identity && it.languageTag == langTag && it.picks.isNotEmpty() }
+            stored?.let { container.artistPortraitResolver.seed(it.artistPhotos) }
+
+            if (stored != null) {
+                _topPicks.value = stored.picks
+                topPicksSlotShown = stored.hourSlot
+                topPicksIdentityShown = identity
+            } else if (!rebuild) {
+                _topPicks.value = null
+            }
+
+            if (!rebuild && stored?.hourSlot == slot && stored.picks.size > 1 && !shouldRebuildFallbackPicks()) {
+                _topPicksLoading.value = false
+                return@launch
+            }
+
+            _topPicksLoading.value = _topPicks.value == null
+            val shelves = withTimeoutOrNull(15_000L) {
+                _homeState.first { it !is UiState.Loading }
+            }.let { (it as? UiState.Success)?.data.orEmpty() }
+
+            val localTaste = collectLocalTaste()
+            val isEnglish = langTag.startsWith("en", ignoreCase = true)
+            val built = try {
+                container.topPicksEngine.build(
+                    homeShelves = shelves,
+                    local = localTaste,
+                    isSignedIn = container.authStore.isSignedIn,
+                    isEnglishLocale = isEnglish,
+                ).takeIf { it.isNotEmpty() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+
+            if (identity != topPicksIdentityKey()) return@launch
+            _topPicksLoading.value = false
+            if (built == null) {
+                if (_topPicks.value == null) _topPicks.value = emptyList()
+                return@launch
+            }
+
+            _topPicks.value = built
+            topPicksSlotShown = slot
+            topPicksIdentityShown = identity
+            // Avoid locking in a sparse 1-card cache when Home hadn't settled yet.
+            if (built.size > 1 || shelves.isNotEmpty()) {
+                container.topPicksCacheStore.save(
+                    StoredTopPicks(
+                        identity = identity,
+                        hourSlot = slot,
+                        languageTag = langTag,
+                        picks = built,
+                        artistPhotos = container.artistPortraitResolver.snapshot(),
+                    ),
+                )
+            }
+        }
+    }
+
+    private suspend fun collectLocalTaste(): TopPicksEngine.LocalTaste {
+        val month = runCatching {
+            container.libraryRepository.observeReplay(ReplayPeriod.THIS_MONTH).first()
+        }.getOrNull()
+        val summary = if (month != null && (month.topArtists.isNotEmpty() || month.topSongs.isNotEmpty())) {
+            month
+        } else {
+            runCatching {
+                container.libraryRepository.observeReplay(ReplayPeriod.ALL_TIME).first()
+            }.getOrNull()
+        } ?: return TopPicksEngine.LocalTaste()
+
+        return TopPicksEngine.LocalTaste(
+            artists = summary.topArtists.take(10).map { ArtistRef(name = it.name, browseId = it.browseId) },
+            songs = summary.topSongs.take(5).map { it.song },
+        )
+    }
+
+    fun openTopPick(pick: TopPick, onFailure: () -> Unit) {
+        val browseId = pick.browseId
+        if (pick.kind == TopPickKind.LATEST_RELEASE && !browseId.isNullOrBlank()) {
+            openDetail(browseId, pick.fallbackParams)
+            return
+        }
+        val requestId = topPickPlayGeneration.incrementAndGet()
+        val pickKey = pick.stableKey
+        _activeTopPickLoadingKey.value = pickKey
+        viewModelScope.launch {
+            try {
+                val localSongs = recentlyPlayedSongs.value
+                val songs = container.topPicksEngine.resolveQueue(pick, localHistorySongs = localSongs)
+                    .getOrNull()
+                    .orEmpty()
+                if (topPickPlayGeneration.get() != requestId) return@launch
+                if (songs.isEmpty()) {
+                    onFailure()
+                } else {
+                    container.playerController.playQueue(songs, startIndex = 0, shuffled = false)
+                }
+            } finally {
+                if (_activeTopPickLoadingKey.value == pickKey && topPickPlayGeneration.get() == requestId) {
+                    _activeTopPickLoadingKey.value = null
+                }
+            }
         }
     }
 
@@ -578,6 +750,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { container.settingsStore.setOnboardingCompleted(true) }
         refreshAccountAndRemoteLibrary()
         loadHome(isRefresh = true)
+        loadTopPicks(rebuild = true)
         loadMixes(isRefresh = true)
     }
 
@@ -593,6 +766,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         container.streamResolver.clearCache()
         _remoteLibrary.value = emptyList()
         loadHome(isRefresh = true)
+        loadTopPicks(rebuild = true)
         loadMixes(isRefresh = true)
     }
 
@@ -876,6 +1050,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun setFrostedGlass(enabled: Boolean) = viewModelScope.launch { container.settingsStore.setFrostedGlass(enabled) }
     fun setReduceAnimation(enabled: Boolean) = viewModelScope.launch { container.settingsStore.setReduceAnimation(enabled) }
+    fun setHideTopPicks(hidden: Boolean) = viewModelScope.launch { container.settingsStore.setHideTopPicks(hidden) }
 
     fun refreshLibrary() {
         viewModelScope.launch {
@@ -939,6 +1114,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         container.settingsStore.setAppLanguage(language)
         container.ytMusicRepository.clearCache()
         loadHome(isRefresh = true)
+        loadTopPicks(rebuild = true)
         loadExplore(isRefresh = true)
         loadMixes(isRefresh = true)
     }

@@ -36,6 +36,7 @@ data class UserSettings(
     val audioCacheLimitMb: Int = 512,
     val frostedGlassEnabled: Boolean = true,
     val reduceAnimation: Boolean = false,
+    val hideTopPicks: Boolean = false,
     val appLanguage: AppLanguage = AppLanguage.SYSTEM,
     val wifiQuality: AudioQuality = AudioQuality.MAX,
     val cellularQuality: AudioQuality = AudioQuality.MEDIUM,
@@ -69,6 +70,7 @@ class SettingsStore internal constructor(
         val AUDIO_CACHE_LIMIT_MB = intPreferencesKey("audio_cache_limit_mb")
         val FROSTED_GLASS = booleanPreferencesKey("frosted_glass")
         val REDUCE_ANIMATION = booleanPreferencesKey("reduce_animation")
+        val HIDE_TOP_PICKS = booleanPreferencesKey("hide_top_picks")
         val APP_LANGUAGE = stringPreferencesKey("app_language")
         val WIFI_QUALITY = stringPreferencesKey("wifi_quality")
         val CELLULAR_QUALITY = stringPreferencesKey("cellular_quality")
@@ -117,6 +119,7 @@ class SettingsStore internal constructor(
             audioCacheLimitMb = (prefs[Keys.AUDIO_CACHE_LIMIT_MB] ?: 512).coerceIn(128, 4096),
             frostedGlassEnabled = prefs[Keys.FROSTED_GLASS] ?: true,
             reduceAnimation = prefs[Keys.REDUCE_ANIMATION] ?: false,
+            hideTopPicks = prefs[Keys.HIDE_TOP_PICKS] ?: false,
             appLanguage = prefs[Keys.APP_LANGUAGE]?.let { runCatching { AppLanguage.valueOf(it) }.getOrNull() }
                 ?: AppLanguage.SYSTEM,
             wifiQuality = prefs[Keys.WIFI_QUALITY]?.let { runCatching { AudioQuality.valueOf(it) }.getOrNull() }
@@ -183,6 +186,10 @@ class SettingsStore internal constructor(
 
     suspend fun setReduceAnimation(enabled: Boolean) {
         dataStore.edit { it[Keys.REDUCE_ANIMATION] = enabled }
+    }
+
+    suspend fun setHideTopPicks(hidden: Boolean) {
+        dataStore.edit { it[Keys.HIDE_TOP_PICKS] = hidden }
     }
 
     suspend fun setAppLanguage(language: AppLanguage) {
@@ -261,6 +268,7 @@ class SettingsStore internal constructor(
             prefs[Keys.AUDIO_CACHE_LIMIT_MB] = restored.audioCacheLimitMb.coerceIn(128, 4096)
             prefs[Keys.FROSTED_GLASS] = restored.frostedGlassEnabled
             prefs[Keys.REDUCE_ANIMATION] = restored.reduceAnimation
+            prefs[Keys.HIDE_TOP_PICKS] = restored.hideTopPicks
             prefs[Keys.APP_LANGUAGE] = restored.appLanguage.name
             prefs[Keys.WIFI_QUALITY] = restored.wifiQuality.name
             prefs[Keys.CELLULAR_QUALITY] = restored.cellularQuality.name

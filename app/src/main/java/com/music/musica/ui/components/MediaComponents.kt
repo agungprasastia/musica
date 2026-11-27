@@ -441,10 +441,10 @@ fun PagedTrackCarousel(
             snapPosition = SnapPosition.Start,
             beyondViewportPageCount = 1,
             flingBehavior = fling,
-            key = { pIdx -> "page_${pIdx}_${pages[pIdx].first().videoId}" },
+            key = { pIdx -> pages.getOrNull(pIdx)?.firstOrNull()?.let { "page_${pIdx}_${it.videoId}" } ?: "page_$pIdx" },
             modifier = Modifier.fillMaxWidth(),
         ) { pageIndex ->
-            val pageTracks = pages[pageIndex]
+            val pageTracks = pages.getOrNull(pageIndex) ?: return@HorizontalPager
             Column(modifier = Modifier.fillMaxWidth()) {
                 pageTracks.forEachIndexed { rowIdx, song ->
                     val flatIdx = pageIndex * rowsPerPage + rowIdx
@@ -670,10 +670,10 @@ fun ShelfSection(
                         pagerSnapDistance = PagerSnapDistance.atMost(2),
                         snapPositionalThreshold = 0.18f,
                     ),
-                    key = { idx -> "vid_${idx}_${shelf.items[idx].id}" },
+                    key = { idx -> shelf.items.getOrNull(idx)?.let { "vid_${idx}_${it.id}" } ?: "vid_$idx" },
                     modifier = Modifier.fillMaxWidth(),
                 ) { idx ->
-                    val track = shelf.items[idx] as ShelfItem.Track
+                    val track = shelf.items.getOrNull(idx) as? ShelfItem.Track ?: return@HorizontalPager
                     VideoShelfCard(
                         item = track,
                         isActive = track.song.videoId == activeVideoId,

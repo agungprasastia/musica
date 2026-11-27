@@ -58,6 +58,29 @@
     <!-- Home / Explore / Mixes -->
     <string name="home_top_picks">Top Picks for You</string>
     <string name="home_recently_played">Recently Played</string>
+    <string name="top_pick_new_from">New from %1$s</string>
+    <string name="top_pick_made_for_you">Made for You</string>
+    <string name="top_pick_named_station">%1$s\'s Station</string>
+    <string name="top_pick_your_station">Your Station</string>
+    <string name="top_pick_discovery_station">Discovery Station</string>
+    <string name="top_pick_mood_for_you">Mood for You</string>
+    <string name="top_pick_featuring">Featuring %1$s</string>
+    <string name="top_pick_and_similar">%1$s &amp; Similar Artists</string>
+    <string name="top_pick_load_failed">Could not start this station</string>
+    <string name="mood_energy">Energy</string>
+    <string name="mood_energy_line">High-voltage tracks to lift the room.</string>
+    <string name="mood_relax">Relax</string>
+    <string name="mood_relax_line">Gentle rhythms to slow the pace.</string>
+    <string name="mood_feeling_blue">Feeling Blue</string>
+    <string name="mood_feeling_blue_line">Quiet songs for reflective moments.</string>
+    <string name="mood_feel_good">Feel Good</string>
+    <string name="mood_feel_good_line">Bright favorites to keep spirits high.</string>
+    <string name="mood_focus">Focus</string>
+    <string name="mood_focus_line">Steady soundscapes to stay in the zone.</string>
+    <string name="mood_heartbreak">Heartbreak</string>
+    <string name="mood_heartbreak_line">Honest songs when you need to feel it.</string>
+    <string name="mood_love">Love</string>
+    <string name="mood_love_line">Romantic songs for the moment.</string>
     <string name="explore_title">Explore</string>
     <string name="mixes_title">Mixes</string>
     <string name="mixes_subtitle">Curated stations and endless mixes</string>
@@ -276,6 +299,8 @@
     <string name="settings_frosted_glass_desc">Translucent blur on bars and sheets</string>
     <string name="settings_reduce_animation">Reduce Animation</string>
     <string name="settings_reduce_animation_desc">Simplify mesh gradient and transitions</string>
+    <string name="settings_hide_top_picks">Hide Top Picks</string>
+    <string name="settings_hide_top_picks_desc">Remove the Top Picks for You carousel from Home</string>
 
     <string name="settings_lyrics_prefer_word">Prefer Word-Synced Lyrics</string>
     <string name="settings_lyrics_prefer_word_desc">Keep searching providers for syllable/word timing</string>

@@ -417,10 +417,10 @@ private fun MixFeatureCarousel(
             snapPosition = SnapPosition.Start,
             beyondViewportPageCount = 1,
             flingBehavior = fling,
-            key = { idx -> "feat_${idx}_${items[idx].id}" },
+            key = { idx -> items.getOrNull(idx)?.let { "feat_${idx}_${it.id}" } ?: "feat_$idx" },
             modifier = Modifier.fillMaxWidth(),
         ) { idx ->
-            val item = items[idx]
+            val item = items.getOrNull(idx) ?: return@HorizontalPager
             MixFeatureCard(
                 item = item,
                 reduceAnimation = reduceAnimation,

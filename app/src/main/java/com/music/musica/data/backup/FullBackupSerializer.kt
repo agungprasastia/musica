@@ -113,6 +113,7 @@ object FullBackupSerializer {
         "audioCacheLimitMb",
         "frostedGlassEnabled",
         "reduceAnimation",
+        "hideTopPicks",
         "appLanguage",
         "wifiQuality",
         "cellularQuality",

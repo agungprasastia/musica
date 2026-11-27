@@ -513,4 +513,195 @@ class InnertubeParsersTest {
         val signedDashS = "https://lh3.googleusercontent.com/xyz=w226-h226-s-l90-rj"
         assertEquals(signedDashS, com.music.musica.core.model.upsizeArtworkUrl(signedDashS, 72))
     }
+
+    @Test
+    fun smartCropArtworkUrl_handlesPortraitGoogleAndMzstaticUrls() {
+        val banner = "https://lh3.googleusercontent.com/artist_banner=w1200-h500-l90-rj"
+        assertEquals(
+            "https://lh3.googleusercontent.com/artist_banner=w600-h800-p-l90-rj",
+            com.music.musica.core.model.smartCropArtworkUrl(banner, 600, 800),
+        )
+        val portrait = "https://is1-ssl.mzstatic.com/image/thumb/AMCArtistImages221/v4/aa/bb/cc/file.jpg/1200x630cw.jpg"
+        assertEquals(
+            "https://is1-ssl.mzstatic.com/image/thumb/AMCArtistImages221/v4/aa/bb/cc/file.jpg/800x800cc.jpg",
+            com.music.musica.core.model.smartCropArtworkUrl(portrait, 600, 800),
+        )
+    }
+
+    @Test
+    fun parseDetailPage_extractsArtistMonthlyListenersSubscribersRadioAndShuffleTargets() {
+        val raw = """
+        {
+          "header": {
+            "musicImmersiveHeaderRenderer": {
+              "title": { "runs": [{ "text": "Ave Mujica" }] },
+              "monthlyListenerCount": { "runs": [{ "text": "228K monthly audience" }] },
+              "subscriptionButton2": {
+                "subscribeButtonRenderer": {
+                  "subscriberCountWithSubscribeText": { "runs": [{ "text": "180K subscribers" }] }
+                }
+              },
+              "startRadioButton": {
+                "buttonRenderer": {
+                  "navigationEndpoint": {
+                    "watchEndpoint": {
+                      "playlistId": "RDEM_avemujica",
+                      "videoId": "seed_vid_1",
+                      "params": "wAEB%3D"
+                    }
+                  }
+                }
+              },
+              "playButton": {
+                "buttonRenderer": {
+                  "navigationEndpoint": {
+                    "watchEndpoint": {
+                      "playlistId": "RDAO_avemujica",
+                      "videoId": "shuf_vid_1",
+                      "params": "shuf%3D"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "contents": { "singleColumnBrowseResultsRenderer": { "tabs": [] } }
+        }
+        """.trimIndent()
+
+        val page = InnertubeParsers.parseDetailPage("UC_avemujica", json.parseToJsonElement(raw).jsonObject)
+        assertEquals("Ave Mujica", page.title)
+        assertEquals("228K monthly audience", page.monthlyListenerCount)
+        assertEquals("180K subscribers", page.subscriberCountText)
+        assertEquals("RDEM_avemujica", page.radioTarget?.playlistId)
+        assertEquals("seed_vid_1", page.radioTarget?.videoId)
+        assertEquals("wAEB=", page.radioTarget?.params)
+        assertEquals("RDAO_avemujica", page.shuffleTarget?.playlistId)
+        assertEquals("shuf_vid_1", page.shuffleTarget?.videoId)
+        assertEquals("shuf=", page.shuffleTarget?.params)
+    }
+
+    @Test
+    fun parseUpNext_preferAudioSwapsPairedVideoToAudioCounterpart() {
+        val raw = """
+        {
+          "contents": {
+            "singleColumnMusicWatchNextResultsRenderer": {
+              "tabbedRenderer": {
+                "watchNextTabbedResultsRenderer": {
+                  "tabs": [{
+                    "tabRenderer": {
+                      "content": {
+                        "musicQueueRenderer": {
+                          "content": {
+                            "playlistPanelRenderer": {
+                              "contents": [{
+                                "playlistPanelVideoWrapperRenderer": {
+                                  "primaryRenderer": {
+                                    "playlistPanelVideoRenderer": {
+                                      "videoId": "mv_video_id",
+                                      "title": { "runs": [{ "text": "Song (Official Video)" }] },
+                                      "longBylineText": { "runs": [{ "text": "Artist A" }] },
+                                      "navigationEndpoint": {
+                                        "watchEndpoint": {
+                                          "watchEndpointMusicSupportedConfigs": {
+                                            "watchEndpointMusicConfig": { "musicVideoType": "MUSIC_VIDEO_TYPE_OMV" }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "counterpart": [{
+                                    "counterpartRenderer": {
+                                      "playlistPanelVideoRenderer": {
+                                        "videoId": "atv_audio_id",
+                                        "title": { "runs": [{ "text": "Song" }] },
+                                        "longBylineText": { "runs": [{ "text": "Artist A" }] },
+                                        "navigationEndpoint": {
+                                          "watchEndpoint": {
+                                            "watchEndpointMusicSupportedConfigs": {
+                                              "watchEndpointMusicConfig": { "musicVideoType": "MUSIC_VIDEO_TYPE_ATV" }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }]
+                                }
+                              }]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }]
+                }
+              }
+            }
+          }
+        }
+        """.trimIndent()
+        val root = json.parseToJsonElement(raw).jsonObject
+        val defaultQueue = InnertubeParsers.parseUpNext(root, preferAudio = false)
+        assertEquals("mv_video_id", defaultQueue.single().videoId)
+
+        val audioQueue = InnertubeParsers.parseUpNext(root, preferAudio = true)
+        assertEquals("atv_audio_id", audioQueue.single().videoId)
+    }
+
+    @Test
+    fun parseHistorySongs_collectsAndDeduplicatesInRecencyOrder() {
+        val raw = """
+        {
+          "contents": {
+            "singleColumnBrowseResultsRenderer": {
+              "tabs": [{
+                "tabRenderer": {
+                  "content": {
+                    "sectionListRenderer": {
+                      "contents": [{
+                        "musicShelfRenderer": {
+                          "contents": [
+                            {
+                              "musicResponsiveListItemRenderer": {
+                                "playlistItemData": { "videoId": "v_recent" },
+                                "flexColumns": [
+                                  { "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": "Newest" }] } } },
+                                  { "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": "Alpha", "navigationEndpoint": { "browseEndpoint": { "browseId": "UC_alpha" } } }] } } }
+                                ]
+                              }
+                            },
+                            {
+                              "musicResponsiveListItemRenderer": {
+                                "playlistItemData": { "videoId": "v_older" },
+                                "flexColumns": [
+                                  { "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": "Older" }] } } },
+                                  { "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": "Beta", "navigationEndpoint": { "browseEndpoint": { "browseId": "UC_beta" } } }] } } }
+                                ]
+                              }
+                            },
+                            {
+                              "musicResponsiveListItemRenderer": {
+                                "playlistItemData": { "videoId": "v_recent" },
+                                "flexColumns": [
+                                  { "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": "Newest Duplicate" }] } } }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }]
+                    }
+                  }
+                }
+              }]
+            }
+          }
+        }
+        """.trimIndent()
+
+        val history = InnertubeParsers.parseHistorySongs(json.parseToJsonElement(raw).jsonObject)
+        assertEquals(listOf("v_recent", "v_older"), history.map { it.videoId })
+        assertEquals("UC_alpha", history[0].primaryArtistId)
+    }
 }

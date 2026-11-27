@@ -40,6 +40,8 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.musica.R
 import com.music.musica.core.auth.GoogleSession
@@ -47,6 +49,8 @@ import com.music.musica.core.model.AppLanguage
 import com.music.musica.core.model.BrowseType
 import com.music.musica.core.model.ShelfItem
 import com.music.musica.core.model.Song
+import com.music.musica.core.model.TopPick
+import com.music.musica.core.model.TopPickKind
 import com.music.musica.core.model.UiState
 import com.music.musica.core.settings.UserSettings
 import com.music.musica.data.lyrics.SyncedLyricsParser
@@ -112,6 +116,15 @@ internal fun MusicaAppRoot(
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var nowPlayingExpanded by rememberSaveable { mutableStateOf(false) }
     var onboardingLoginOpen by remember { mutableStateOf(false) }
+    var appForeground by remember { mutableStateOf(true) }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        appForeground = true
+        vm.refreshTopPicksIfStale()
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
+        appForeground = false
+    }
 
     var actionMenuSong by remember { mutableStateOf<Song?>(null) }
     var browseActionTarget by remember { mutableStateOf<BrowseActionTarget?>(null) }
@@ -191,6 +204,34 @@ internal fun MusicaAppRoot(
     val onOpenBrowseMore: (ShelfItem) -> Unit = remember {
         { item: ShelfItem ->
             BrowseActionTarget.fromShelfItem(item)?.let { browseActionTarget = it }
+        }
+    }
+    val onOpenTopPickMore: (TopPick) -> Unit = remember {
+        { pick: TopPick ->
+            when (pick.kind) {
+                TopPickKind.LATEST_RELEASE -> pick.browseId?.takeIf { it.isNotBlank() }?.let { id ->
+                    browseActionTarget = BrowseActionTarget(
+                        browseId = id,
+                        type = if (id.startsWith("VL")) BrowseType.PLAYLIST else BrowseType.ALBUM,
+                        title = pick.title,
+                        subtitle = pick.artistName ?: pick.subtitle.ifBlank { null },
+                        thumbnailUrl = pick.images.firstOrNull(),
+                        params = pick.fallbackParams,
+                    )
+                }
+                TopPickKind.FEATURED_ARTIST,
+                TopPickKind.ARTIST_AND_SIMILAR,
+                -> pick.artistBrowseId?.takeIf { it.isNotBlank() }?.let { artistId ->
+                    browseActionTarget = BrowseActionTarget(
+                        browseId = artistId,
+                        type = BrowseType.ARTIST,
+                        title = pick.artistName ?: pick.title,
+                        subtitle = pick.subtitle.ifBlank { null },
+                        thumbnailUrl = pick.images.firstOrNull(),
+                    )
+                }
+                else -> Unit
+            }
         }
     }
 
@@ -378,8 +419,10 @@ internal fun MusicaAppRoot(
                         downloadedIds = downloadedIds,
                         hazeState = hazeState,
                         settings = settings,
+                        artworkMotionEnabled = appForeground && !nowPlayingExpanded && !hasActiveOverlay && !settings.reduceAnimation,
                         bottomPadding = chromeBottomPadding,
                         listState = homeListState,
+                        onTopPickLongClick = onOpenTopPickMore,
                         onBrowseLongClick = onOpenBrowseMore,
                         onSongMore = onOpenSongMore,
                         onPlayNext = onPlayNextWithToast,
@@ -743,8 +786,10 @@ private fun HomeTabHost(
     downloadedIds: Set<String>,
     hazeState: HazeState,
     settings: UserSettings,
+    artworkMotionEnabled: Boolean,
     bottomPadding: Dp,
     listState: LazyListState,
+    onTopPickLongClick: (TopPick) -> Unit,
     onBrowseLongClick: (ShelfItem) -> Unit,
     onSongMore: (Song) -> Unit,
     onPlayNext: (Song) -> Unit,
@@ -754,11 +799,21 @@ private fun HomeTabHost(
     onOpenSettings: () -> Unit,
     onOpenLogin: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val resources = LocalResources.current
     val homeState by vm.homeState.collectAsStateWithLifecycle()
     val homeRefreshing by vm.homeRefreshing.collectAsStateWithLifecycle()
+    val topPicks by vm.topPicks.collectAsStateWithLifecycle()
+    val topPicksLoading by vm.topPicksLoading.collectAsStateWithLifecycle()
+    val activeTopPickLoadingKey by vm.activeTopPickLoadingKey.collectAsStateWithLifecycle()
     val recentlyPlayed by vm.recentlyPlayedSongs.collectAsStateWithLifecycle()
     HomeScreen(
         state = homeState,
+        topPicks = topPicks,
+        topPicksLoading = topPicksLoading,
+        activeTopPickLoadingKey = activeTopPickLoadingKey,
+        hideTopPicks = settings.hideTopPicks,
+        artworkMotionEnabled = artworkMotionEnabled,
         recentlyPlayed = recentlyPlayed,
         profile = authSession?.profile,
         isSignedIn = authSession?.isSignedIn == true,
@@ -772,6 +827,12 @@ private fun HomeTabHost(
         listState = listState,
         onRefresh = { vm.loadHome(isRefresh = true) },
         onLoadMore = vm::loadMoreHome,
+        onTopPickClick = { pick, _ ->
+            vm.openTopPick(pick) {
+                Toast.makeText(context, resources.getString(R.string.top_pick_load_failed), Toast.LENGTH_SHORT).show()
+            }
+        },
+        onTopPickLongClick = onTopPickLongClick,
         onItemClick = { vm.handleShelfItemClick(it) },
         onBrowseLongClick = onBrowseLongClick,
         onSongMore = onSongMore,
@@ -1011,6 +1072,7 @@ private fun SettingsOverlayHost(
         onSetShowRemainingTime = vm::setShowRemainingTime,
         onSetFrostedGlass = vm::setFrostedGlass,
         onSetReduceAnimation = vm::setReduceAnimation,
+        onSetHideTopPicks = vm::setHideTopPicks,
         onSetPreferWordLyrics = vm::setPreferWordLyrics,
         onSetBlurUnfocusedLyrics = vm::setBlurUnfocusedLyrics,
         onSetShowLyricsPreview = vm::setShowLyricsPreviewStrip,
