@@ -393,6 +393,14 @@
     <string name="player_lyrics_instrumental">Instrumental</string>
     <string name="player_lyrics_none_found">Lirik tidak ditemukan</string>
     <string name="menu_lyrics_offset">Penyesuaian Lirik</string>
+    <string name="player_sleep_end_of_track_short">Akhir lagu</string>
+    <string name="library_connect_title">Hubungkan YouTube Music</string>
+    <string name="library_connect_subtitle">Masuk untuk menyinkronkan lagu disukai, playlist, dan album tersimpanmu.</string>
+    <string name="library_see_all">Lihat semua</string>
+    <string name="detail_filter_empty">Tidak ada lagu yang cocok dengan “%1$s”</string>
+    <string name="toast_subscribed">Berlangganan artis</string>
+    <string name="toast_unsubscribed">Berhenti berlangganan artis</string>
+    <string name="a11y_move_up">Pindah ke atas</string>
 
     <string-array name="lyrics_loading_lines">
         <item>Memeriksa arsip</item>
@@ -414,7 +422,7 @@
         <item>Membangun suasana</item>
         <item>Bass dulu, kata-kata menyusul</item>
         <item>Tunggu vokal masuk</item>
-        <item>Nikmati intronyanya dulu</item>
+        <item>Nikmati intronya dulu</item>
         <item>Vokal sebentar lagi</item>
         <item>Memanaskan melodi</item>
         <item>Tepat setelah intro ini</item>

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -107,6 +108,13 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlin.math.roundToInt
 
+sealed interface SettingsModalRequest {
+    data object ConfirmSignOut : SettingsModalRequest
+    data object WifiQuality : SettingsModalRequest
+    data object CellularQuality : SettingsModalRequest
+    data object TranslationLanguage : SettingsModalRequest
+}
+
 /**
  * Musica Settings screen featuring:
  * - Live in-Settings search bar filtering groups and rows dynamically
@@ -159,14 +167,15 @@ fun SettingsScreen(
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     onSetLanguage: (AppLanguage) -> Unit,
+    onOpenModal: ((SettingsModalRequest) -> Unit)? = null,
 ) {
     val searchState = rememberTextFieldState()
     val searchQuery = searchState.text.toString()
-    var confirmSignOut by remember { mutableStateOf(false) }
-    var pickingWifiQuality by remember { mutableStateOf(false) }
-    var pickingCellQuality by remember { mutableStateOf(false) }
-    var pickingTranslationLanguage by remember { mutableStateOf(false) }
+    var localModal by remember { mutableStateOf<SettingsModalRequest?>(null) }
     val screenHazeState = rememberHazeState()
+    fun openModal(req: SettingsModalRequest) {
+        if (onOpenModal != null) onOpenModal(req) else localModal = req
+    }
 
     val q = searchQuery.trim().lowercase()
     fun matches(vararg keywords: String): Boolean =
@@ -236,12 +245,12 @@ fun SettingsScreen(
                 )
             }
             if (searchQuery.isNotEmpty()) {
-                IconButton(onClick = { searchState.clearText() }, modifier = Modifier.size(26.dp)) {
+                IconButton(onClick = { searchState.clearText() }, modifier = Modifier.size(38.dp)) {
                     Icon(
                         imageVector = Icons.Rounded.Close,
                         contentDescription = stringResource(R.string.action_clear),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }
@@ -266,7 +275,7 @@ fun SettingsScreen(
                             },
                             value = stringResource(if (isSignedIn) R.string.auth_sign_out else R.string.auth_sign_in),
                             destructive = isSignedIn,
-                            onClick = { if (isSignedIn) confirmSignOut = true else onSignIn() },
+                            onClick = { if (isSignedIn) openModal(SettingsModalRequest.ConfirmSignOut) else onSignIn() },
                         )
                         if (isSignedIn) {
                             GroupDivider()
@@ -295,7 +304,10 @@ fun SettingsScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f),
+                                ) {
                                     Icon(
                                         imageVector = Icons.Rounded.GraphicEq,
                                         contentDescription = null,
@@ -303,8 +315,14 @@ fun SettingsScreen(
                                         modifier = Modifier.size(22.dp),
                                     )
                                     Spacer(Modifier.width(14.dp))
-                                    Text(stringResource(R.string.settings_crossfade), style = MaterialTheme.typography.bodyLarge)
+                                    Text(
+                                        text = stringResource(R.string.settings_crossfade),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
                                 }
+                                Spacer(Modifier.width(10.dp))
                                 Text(
                                     text = if (draftCrossfade == 0) {
                                         stringResource(R.string.settings_crossfade_off)
@@ -313,6 +331,7 @@ fun SettingsScreen(
                                     },
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                                     color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
                                 )
                             }
                             Spacer(Modifier.height(6.dp))
@@ -365,19 +384,21 @@ fun SettingsScreen(
                         SettingsValueRow(
                             icon = Icons.Rounded.Wifi,
                             title = stringResource(R.string.settings_wifi_quality),
+                            subtitle = qualityLabel(settings.wifiQuality),
                             badge = if (networkType == NetworkType.WIFI) stringResource(R.string.settings_in_use) else null,
-                            value = qualityLabel(settings.wifiQuality),
+                            value = "",
                             showChevron = true,
-                            onClick = { pickingWifiQuality = true },
+                            onClick = { openModal(SettingsModalRequest.WifiQuality) },
                         )
                         GroupDivider()
                         SettingsValueRow(
                             icon = Icons.Rounded.SignalCellularAlt,
                             title = stringResource(R.string.settings_cellular_quality),
+                            subtitle = qualityLabel(settings.cellularQuality),
                             badge = if (networkType == NetworkType.CELLULAR) stringResource(R.string.settings_in_use) else null,
-                            value = qualityLabel(settings.cellularQuality),
+                            value = "",
                             showChevron = true,
-                            onClick = { pickingCellQuality = true },
+                            onClick = { openModal(SettingsModalRequest.CellularQuality) },
                         )
                     }
                 }
@@ -463,7 +484,7 @@ fun SettingsScreen(
             }
 
             // 5. Lyrics
-            if (matches("lyrics", "lirik", "betterlyrics", "lrclib", "blur", "preview", "pratinjau", "word", "kata")) {
+            if (matches("lyrics", "lirik", "betterlyrics", "lrclib", "blur", "preview", "pratinjau", "word", "kata", "translate", "terjemah", "bahasa", "language", "provider", "penyedia", "genius", "musixmatch", "kugou", "simpmusic", "paxsenix")) {
                 item(key = "sec_lyrics") {
                     SettingsGroup(title = stringResource(R.string.settings_section_lyrics)) {
                         SettingsSwitchRow(
@@ -503,38 +524,43 @@ fun SettingsScreen(
                         SettingsValueRow(
                             icon = Icons.Rounded.Translate,
                             title = stringResource(R.string.settings_translation_language),
-                            value = selectedTranslationLabel,
+                            subtitle = selectedTranslationLabel,
+                            value = "",
                             showChevron = true,
-                            onClick = { pickingTranslationLanguage = true },
+                            onClick = { openModal(SettingsModalRequest.TranslationLanguage) },
                         )
                         settings.lyricsSourceOrder.forEachIndexed { idx, source ->
                             GroupDivider()
+                            val isEnabled = source in settings.enabledLyricsSources
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .clickable { onToggleLyricsSource(source, !isEnabled) }
                                     .padding(horizontal = 16.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(
                                     text = source.displayName,
                                     style = MaterialTheme.typography.bodyLarge,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f),
                                 )
                                 if (idx > 0) {
                                     IconButton(
                                         onClick = { onMoveLyricsSourceUp(source) },
-                                        modifier = Modifier.size(32.dp),
+                                        modifier = Modifier.size(40.dp),
                                     ) {
                                         Icon(
                                             imageVector = Icons.Rounded.ArrowUpward,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp),
+                                            contentDescription = stringResource(R.string.a11y_move_up),
+                                            modifier = Modifier.size(19.dp),
                                         )
                                     }
-                                    Spacer(Modifier.width(6.dp))
+                                    Spacer(Modifier.width(4.dp))
                                 }
                                 IosSwitch(
-                                    checked = source in settings.enabledLyricsSources,
+                                    checked = isEnabled,
                                     onCheckedChange = { onToggleLyricsSource(source, it) },
                                 )
                             }
@@ -585,7 +611,10 @@ fun SettingsScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f),
+                                ) {
                                     Icon(
                                         imageVector = Icons.Rounded.Storage,
                                         contentDescription = null,
@@ -593,8 +622,14 @@ fun SettingsScreen(
                                         modifier = Modifier.size(22.dp),
                                     )
                                     Spacer(Modifier.width(14.dp))
-                                    Text(stringResource(R.string.settings_cache_limit), style = MaterialTheme.typography.bodyLarge)
+                                    Text(
+                                        text = stringResource(R.string.settings_cache_limit),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
                                 }
+                                Spacer(Modifier.width(10.dp))
                                 Text(
                                     text = if (draftCacheLimitMb >= 1024) {
                                         "%.1f GB".format(draftCacheLimitMb / 1024f)
@@ -603,6 +638,7 @@ fun SettingsScreen(
                                     },
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                                     color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
                                 )
                             }
                             Spacer(Modifier.height(6.dp))
@@ -725,64 +761,88 @@ fun SettingsScreen(
         }
     }
 
-    if (confirmSignOut) {
-        LiquidGlassDialog(
+    localModal?.let { modal ->
+        SettingsModalOverlay(
+            request = modal,
+            settings = settings,
             hazeState = screenHazeState,
-            onDismiss = { confirmSignOut = false },
-            title = stringResource(R.string.auth_sign_out),
-            actions = {
-                GlassDialogButton(
-                    text = stringResource(R.string.action_cancel),
-                    onClick = { confirmSignOut = false },
+            onSignOut = onSignOut,
+            onSetWifiQuality = onSetWifiQuality,
+            onSetCellularQuality = onSetCellularQuality,
+            onSetTranslationLanguage = onSetTranslationLanguage,
+            onDismiss = { localModal = null },
+        )
+    }
+    }
+}
+
+@Composable
+internal fun SettingsModalOverlay(
+    request: SettingsModalRequest,
+    settings: UserSettings,
+    hazeState: HazeState,
+    onSignOut: () -> Unit,
+    onSetWifiQuality: (AudioQuality) -> Unit,
+    onSetCellularQuality: (AudioQuality) -> Unit,
+    onSetTranslationLanguage: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    when (request) {
+        SettingsModalRequest.ConfirmSignOut -> {
+            LiquidGlassDialog(
+                hazeState = hazeState,
+                onDismiss = onDismiss,
+                title = stringResource(R.string.auth_sign_out),
+                actions = {
+                    GlassDialogButton(
+                        text = stringResource(R.string.action_cancel),
+                        onClick = onDismiss,
+                    )
+                    GlassDialogButton(
+                        text = stringResource(R.string.auth_sign_out),
+                        destructive = true,
+                        onClick = { onDismiss(); onSignOut() },
+                    )
+                },
+            ) {
+                Text(
+                    text = stringResource(R.string.auth_sign_out_confirm),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = glassContentColor().copy(alpha = 0.80f),
                 )
-                GlassDialogButton(
-                    text = stringResource(R.string.auth_sign_out),
-                    destructive = true,
-                    onClick = { confirmSignOut = false; onSignOut() },
-                )
-            },
-        ) {
-            Text(
-                text = stringResource(R.string.auth_sign_out_confirm),
-                style = MaterialTheme.typography.bodyMedium,
-                color = glassContentColor().copy(alpha = 0.80f),
+            }
+        }
+        SettingsModalRequest.WifiQuality -> {
+            ChoiceDialog(
+                title = stringResource(R.string.settings_wifi_quality),
+                hazeState = hazeState,
+                items = AudioQuality.entries.map { it to qualityLabel(it) },
+                selected = settings.wifiQuality,
+                onSelect = { onDismiss(); onSetWifiQuality(it) },
+                onDismiss = onDismiss,
             )
         }
-    }
-
-    if (pickingWifiQuality) {
-        ChoiceDialog(
-            title = stringResource(R.string.settings_wifi_quality),
-            hazeState = screenHazeState,
-            items = AudioQuality.entries.map { it to qualityLabel(it) },
-            selected = settings.wifiQuality,
-            onSelect = { pickingWifiQuality = false; onSetWifiQuality(it) },
-            onDismiss = { pickingWifiQuality = false },
-        )
-    }
-
-    if (pickingCellQuality) {
-        ChoiceDialog(
-            title = stringResource(R.string.settings_cellular_quality),
-            hazeState = screenHazeState,
-            items = AudioQuality.entries.map { it to qualityLabel(it) },
-            selected = settings.cellularQuality,
-            onSelect = { pickingCellQuality = false; onSetCellularQuality(it) },
-            onDismiss = { pickingCellQuality = false },
-        )
-    }
-
-    if (pickingTranslationLanguage) {
-        TranslationLanguagePickerSheet(
-            selectedCode = settings.translationLanguage,
-            hazeState = screenHazeState,
-            onSelect = { code ->
-                pickingTranslationLanguage = false
-                onSetTranslationLanguage(code)
-            },
-            onDismiss = { pickingTranslationLanguage = false },
-        )
-    }
+        SettingsModalRequest.CellularQuality -> {
+            ChoiceDialog(
+                title = stringResource(R.string.settings_cellular_quality),
+                hazeState = hazeState,
+                items = AudioQuality.entries.map { it to qualityLabel(it) },
+                selected = settings.cellularQuality,
+                onSelect = { onDismiss(); onSetCellularQuality(it) },
+                onDismiss = onDismiss,
+            )
+        }
+        SettingsModalRequest.TranslationLanguage -> {
+            TranslationLanguagePickerSheet(
+                selectedCode = settings.translationLanguage,
+                hazeState = hazeState,
+                onSelect = { code ->
+                    onDismiss()
+                    onSetTranslationLanguage(code)
+                },
+                onDismiss = onDismiss,
+            )
+        }
     }
 }
 
@@ -826,10 +886,10 @@ private fun TranslationLanguagePickerSheet(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(42.dp)
+                    .height(44.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(fg.copy(alpha = 0.08f))
-                    .padding(horizontal = 12.dp),
+                    .padding(start = 12.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
@@ -845,6 +905,8 @@ private fun TranslationLanguagePickerSheet(
                             text = stringResource(R.string.settings_translation_search_hint),
                             style = MaterialTheme.typography.bodyMedium,
                             color = fg.copy(alpha = 0.50f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                     BasicTextField(
@@ -855,10 +917,26 @@ private fun TranslationLanguagePickerSheet(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
+                if (searchState.text.isNotEmpty()) {
+                    IconButton(
+                        onClick = { searchState.clearText() },
+                        modifier = Modifier.size(38.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = stringResource(R.string.action_clear),
+                            tint = fg.copy(alpha = 0.65f),
+                            modifier = Modifier.size(17.dp),
+                        )
+                    }
+                }
             }
             Spacer(Modifier.height(10.dp))
             LazyColumn(
-                modifier = Modifier.fillMaxWidth().height(360.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false)
+                    .heightIn(max = 360.dp),
                 contentPadding = PaddingValues(bottom = 10.dp),
             ) {
                 items(filtered, key = { it.first.ifBlank { "_auto" } }) { (code, label) ->

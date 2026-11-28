@@ -50,6 +50,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.music.musica.R
 import com.music.musica.core.model.BrowseType
 import com.music.musica.core.model.ShelfItem
@@ -188,8 +189,8 @@ fun BrowseActionsSheet(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 18.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 BrowseQuickTile(
                     icon = Icons.Rounded.PlayArrow,
@@ -371,14 +372,14 @@ private fun BrowseQuickTile(
         modifier = modifier
             .lightweightGlass(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 12.dp, horizontal = 8.dp),
+            .padding(vertical = 12.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         Icon(imageVector = icon, contentDescription = label, tint = tint, modifier = Modifier.size(22.dp))
         Text(
             text = label,
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Medium),
             color = tint,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -406,6 +407,9 @@ private fun BrowseActionRow(
             text = label,
             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
             color = tint,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
         )
     }
 }

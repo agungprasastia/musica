@@ -77,7 +77,6 @@ fun QueuePanel(
     queue: List<Song>,
     currentIndex: Int,
     autoplayEnabled: Boolean,
-    onToggleAutoplay: (Boolean) -> Unit,
     onSelectIndex: (Int) -> Unit,
     onMoveItem: (Int, Int) -> Unit,
     onRemoveItem: (Int) -> Unit,
@@ -119,7 +118,7 @@ fun QueuePanel(
                         .clip(RoundedCornerShape(percent = 50))
                         .background(Color.White.copy(alpha = 0.14f))
                         .clickable(onClick = onClearUpcoming)
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
                 ) {
                     Text(
                         text = stringResource(R.string.action_clear),

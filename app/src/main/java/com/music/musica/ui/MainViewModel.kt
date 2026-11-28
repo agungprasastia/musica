@@ -68,6 +68,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicLong
 
+const val LOCAL_LIKED_SONGS_BROWSE_ID = "local_liked_songs"
+
 data class DetailStackEntry(
     val browseId: String,
     val params: String? = null,
@@ -220,6 +222,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         refreshAccountProfileOnly()
         observeSearchSuggestions()
         observeCurrentTrackForLyrics()
+        observeLikedSongsForDetailStack()
+    }
+
+    private fun observeLikedSongsForDetailStack() {
+        viewModelScope.launch {
+            likedSongs.collect { songs ->
+                if (_detailStack.value.none { it.browseId == LOCAL_LIKED_SONGS_BROWSE_ID }) return@collect
+                _detailStack.update { stack ->
+                    stack.map { entry ->
+                        if (entry.browseId == LOCAL_LIKED_SONGS_BROWSE_ID) {
+                            val title = (entry.state as? UiState.Success)?.data?.title
+                                ?: getApplication<Application>().getString(R.string.library_liked_songs)
+                            entry.copy(
+                                state = UiState.Success(
+                                    DetailPage(
+                                        browseId = LOCAL_LIKED_SONGS_BROWSE_ID,
+                                        type = BrowseType.PLAYLIST,
+                                        title = title,
+                                        subtitle = null,
+                                        thumbnailUrl = songs.firstOrNull()?.thumbnailUrl,
+                                        tracks = songs,
+                                    ),
+                                ),
+                            )
+                        } else entry
+                    }
+                }
+            }
+        }
     }
 
     fun ensureExploreLoaded() {
@@ -408,7 +439,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    fun openTopPick(pick: TopPick, onFailure: () -> Unit) {
+    fun openTopPick(pick: TopPick, sourceLabelOverride: String? = null, onFailure: () -> Unit) {
         val browseId = pick.browseId
         if (pick.kind == TopPickKind.LATEST_RELEASE && !browseId.isNullOrBlank()) {
             openDetail(browseId, pick.fallbackParams)
@@ -427,11 +458,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (songs.isEmpty()) {
                     onFailure()
                 } else {
+                    val effectiveSourceLabel = sourceLabelOverride?.takeIf { it.isNotBlank() }
+                        ?: pick.title.takeIf { it.isNotBlank() }
                     container.playerController.playQueue(
                         songs = songs,
                         startIndex = 0,
                         shuffled = false,
-                        sourceLabel = pick.title,
+                        sourceLabel = effectiveSourceLabel,
                         sourceBrowseId = pick.browseId ?: pick.artistBrowseId,
                     )
                 }
@@ -652,6 +685,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         fetchDetailForTop(playlist.playlistId, null, isLocal = true, forceRefresh = true)
     }
 
+    fun openLikedSongs(title: String = getApplication<Application>().getString(R.string.library_liked_songs)) {
+        detailLoadMoreJob?.cancel()
+        _detailLoadingMore.value = false
+        val songs = likedSongs.value
+        val page = DetailPage(
+            browseId = LOCAL_LIKED_SONGS_BROWSE_ID,
+            type = BrowseType.PLAYLIST,
+            title = title,
+            subtitle = null,
+            thumbnailUrl = songs.firstOrNull()?.thumbnailUrl,
+            tracks = songs,
+        )
+        val entry = DetailStackEntry(
+            browseId = LOCAL_LIKED_SONGS_BROWSE_ID,
+            isLocalPlaylist = true,
+            state = UiState.Success(page),
+        )
+        _detailStack.update { it + entry }
+    }
+
     fun retryTopDetail() {
         detailLoadMoreJob?.cancel()
         _detailLoadingMore.value = false
@@ -742,7 +795,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun fetchDetailForTop(browseId: String, params: String?, isLocal: Boolean, forceRefresh: Boolean) {
         viewModelScope.launch {
-            val result = if (isLocal) {
+            val result = if (browseId == LOCAL_LIKED_SONGS_BROWSE_ID) {
+                val songs = likedSongs.value
+                Result.success(
+                    DetailPage(
+                        browseId = LOCAL_LIKED_SONGS_BROWSE_ID,
+                        type = BrowseType.PLAYLIST,
+                        title = getApplication<Application>().getString(R.string.library_liked_songs),
+                        subtitle = null,
+                        thumbnailUrl = songs.firstOrNull()?.thumbnailUrl,
+                        tracks = songs,
+                    ),
+                )
+            } else if (isLocal) {
                 val page = container.libraryRepository.loadLocalPlaylistDetail(browseId)
                 if (page != null) Result.success(page) else Result.failure(IllegalStateException("Playlist not found"))
             } else {

@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -200,7 +201,12 @@ fun SongRow(
                             }
                         },
                     )
-                    .padding(start = 16.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+                    .padding(
+                        start = 16.dp,
+                        end = if (onMoreClick != null) 6.dp else 16.dp,
+                        top = 8.dp,
+                        bottom = 8.dp,
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (indexNumber != null) {
@@ -395,7 +401,7 @@ fun CompactTrackRow(
             if (onMoreClick != null) {
                 IconButton(
                     onClick = onMoreClick,
-                    modifier = Modifier.size(36.dp),
+                    modifier = Modifier.size(40.dp),
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.MoreVert,
@@ -1090,12 +1096,15 @@ private fun SheetActionRow(
             text = label,
             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
             color = tint,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         if (!badge.isNullOrBlank()) {
             Spacer(Modifier.width(10.dp))
             Box(
                 modifier = Modifier
+                    .widthIn(max = 120.dp)
                     .clip(RoundedCornerShape(percent = 50))
                     .background(MusicaAccentRed.copy(alpha = 0.22f))
                     .padding(horizontal = 10.dp, vertical = 3.dp),
@@ -1104,6 +1113,8 @@ private fun SheetActionRow(
                     text = badge,
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = MusicaAccentRed,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }

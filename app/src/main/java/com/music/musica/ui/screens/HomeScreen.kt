@@ -39,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -140,11 +141,11 @@ fun HomeScreen(
                             }
                             Row(
                                 modifier = Modifier
-                                    .height(40.dp)
+                                    .height(42.dp)
                                     .lightweightGlass(RoundedCornerShape(percent = 50))
                                     .padding(horizontal = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
                                 TopPillIcon(
                                     icon = Icons.Rounded.History,
@@ -326,7 +327,7 @@ private fun TopPillIcon(
 ) {
     Box(
         modifier = Modifier
-            .size(34.dp)
+            .size(38.dp)
             .clip(CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -354,6 +355,7 @@ fun ErrorStateCard(
             text = message,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(14.dp))
         Button(

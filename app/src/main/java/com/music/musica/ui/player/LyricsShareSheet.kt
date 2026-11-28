@@ -4,9 +4,11 @@ import android.graphics.Bitmap
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -45,6 +47,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
@@ -172,7 +175,11 @@ fun LyricsShareSheet(
             Spacer(Modifier.height(12.dp))
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onToggleShowLogo(!showLogo) }
+                    .padding(vertical = 6.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -180,14 +187,18 @@ fun LyricsShareSheet(
                     text = stringResource(R.string.lyrics_share_show_logo),
                     style = MaterialTheme.typography.bodyLarge,
                     color = fg,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
+                Spacer(Modifier.width(12.dp))
                 IosSwitch(
                     checked = showLogo,
                     onCheckedChange = onToggleShowLogo,
                 )
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -210,11 +221,16 @@ fun LyricsShareSheet(
                     },
                     enabled = previewBitmap != null && !busy,
                     shape = RoundedCornerShape(14.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                     modifier = Modifier.weight(1f).height(48.dp),
                 ) {
                     Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.action_save))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.action_save),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
 
                 Button(
@@ -236,12 +252,17 @@ fun LyricsShareSheet(
                     },
                     enabled = previewBitmap != null && !busy,
                     shape = RoundedCornerShape(14.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     modifier = Modifier.weight(1f).height(48.dp),
                 ) {
                     Icon(Icons.Rounded.Share, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.menu_share))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.menu_share),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
 

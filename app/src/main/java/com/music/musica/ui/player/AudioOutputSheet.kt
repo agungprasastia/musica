@@ -12,8 +12,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -68,6 +70,7 @@ internal fun audioOutputIcon(kind: AudioOutputKind?): ImageVector = when (kind) 
 fun AudioOutputSheet(
     devices: List<AudioOutputDevice>,
     activeDeviceId: Int?,
+    hasPreferredOverride: Boolean = false,
     needsBluetoothPermission: Boolean,
     hazeState: HazeState?,
     onSelectDevice: (Int?) -> Unit,
@@ -84,6 +87,7 @@ fun AudioOutputSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(bottom = 16.dp),
         ) {
             Row(
@@ -97,8 +101,12 @@ fun AudioOutputSheet(
                     text = stringResource(R.string.player_audio_output),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = fg,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
-                if (activeDeviceId != null) {
+                if (hasPreferredOverride) {
+                    Spacer(Modifier.width(10.dp))
                     GlassDialogButton(
                         text = stringResource(R.string.player_audio_output_auto),
                         onClick = {

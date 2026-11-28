@@ -487,7 +487,6 @@ fun NowPlayingSheet(
                             queue = playerState.queue,
                             currentIndex = playerState.currentIndex,
                             autoplayEnabled = playerState.autoplayEnabled,
-                            onToggleAutoplay = onToggleAutoplay,
                             onSelectIndex = onSelectQueueIndex,
                             onMoveItem = onMoveQueueItem,
                             onRemoveItem = onRemoveQueueItem,
@@ -649,8 +648,8 @@ fun NowPlayingSheet(
         // ---- 4. Adaptive 8-Step Top Status-Bar Scrim + Top Dismiss Strip ("Playing from ...") ----
         val scrimMaxAlpha by animateFloatAsState(
             targetValue = run {
-                val base = (0.16f + topBandLuminance * 0.52f).coerceIn(0.16f, 0.65f)
-                if (activeTab != NowPlayingTab.ARTWORK) maxOf(base, 0.40f) else base
+                val base = (0.24f + topBandLuminance * 0.50f).coerceIn(0.24f, 0.70f)
+                if (activeTab != NowPlayingTab.ARTWORK) maxOf(base, 0.44f) else base
             },
             animationSpec = tween(durationMillis = if (reduceAnimation) 0 else 360),
             label = "top_scrim_alpha",
@@ -708,13 +707,24 @@ fun NowPlayingSheet(
         ) {
             Box(
                 modifier = Modifier
-                    .width(38.dp)
-                    .height(5.dp)
+                    .width(96.dp)
+                    .height(16.dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.56f))
-                    .clickable(onClick = onDismiss),
-            )
-            Spacer(Modifier.height(5.dp))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onDismiss,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(38.dp)
+                        .height(5.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.56f)),
+                )
+            }
             Text(
                 text = stringResource(R.string.player_playing_from, sourceLabel),
                 style = MaterialTheme.typography.labelMedium.copy(

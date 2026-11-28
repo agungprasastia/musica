@@ -350,8 +350,8 @@ private fun BlurredStationTile(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp)
-                    .padding(bottom = 9.dp),
+                    .padding(horizontal = 10.dp)
+                    .padding(bottom = 11.dp),
             )
         }
     }
