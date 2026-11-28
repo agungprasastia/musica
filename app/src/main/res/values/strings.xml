@@ -356,4 +356,30 @@
     <string name="settings_backup_restored">Backup restored</string>
     <string name="settings_backup_failed">Could not process backup file</string>
     <string name="library_ytm_playlist_badge">YouTube Music</string>
+
+    <!-- Pro Lyrics, Translation, Romanization & Share Card -->
+    <string name="lyrics_romanize">Romanize lyrics</string>
+    <string name="lyrics_translate">Translate lyrics</string>
+    <string name="lyrics_translating_to">Translating to %1$s…</string>
+    <string name="lyrics_romanizing">Romanizing lyrics…</string>
+    <string name="lyrics_translated_to">Translated to %1$s</string>
+    <string name="lyrics_romanized">Romanized pronunciation</string>
+    <string name="lyrics_already_in_language">These lyrics are already in %1$s</string>
+    <string name="lyrics_already_romanized">These lyrics already use Latin characters</string>
+    <string name="lyrics_translation_failed">Could not translate lyrics</string>
+    <string name="lyrics_provider_in_use">Currently active</string>
+    <string name="lyrics_provider_found">Lyrics found · Tap to use</string>
+    <string name="lyrics_provider_fetching">Fetching lyrics…</string>
+    <string name="lyrics_provider_not_found">No lyrics found · Tap to retry</string>
+    <string name="lyrics_provider_tap_to_fetch">Tap to search</string>
+    <string name="lyrics_share_title">Share Lyrics</string>
+    <string name="lyrics_share_format_story">Story (9:16)</string>
+    <string name="lyrics_share_format_card">Card</string>
+    <string name="lyrics_share_show_logo">Show Musica logo</string>
+    <string name="lyrics_share_card_full">Card is full (250 char limit)</string>
+    <string name="lyrics_share_saved">Saved lyric card to Gallery</string>
+    <string name="lyrics_share_failed">Could not export lyric card</string>
+    <string name="settings_translation_language">Translation Language</string>
+    <string name="settings_translation_auto">Automatic (App language)</string>
+    <string name="settings_translation_search_hint">Search languages…</string>
 </resources>

@@ -520,7 +520,13 @@ object InnertubeParsers {
         return null
     }
 
-    fun parseTimedLyricsLines(browseRoot: JsonObject): List<Pair<Long, String>> {
+    data class TimedLyricCue(
+        val startMs: Long,
+        val endMs: Long?,
+        val text: String,
+    )
+
+    fun parseTimedLyricsLines(browseRoot: JsonObject): List<TimedLyricCue> {
         val timedData = browseRoot.obj("contents")
             ?.obj("elementRenderer")
             ?.obj("newElement")
@@ -535,10 +541,46 @@ object InnertubeParsers {
         return timedData.mapNotNull { entry ->
             val obj = entry.asObj() ?: return@mapNotNull null
             val line = obj.str("lyricLine")?.trim() ?: return@mapNotNull null
-            val startMs = obj.obj("cueRange")?.str("startTimeMilliseconds")?.toLongOrNull()
+            val cue = obj.obj("cueRange") ?: return@mapNotNull null
+            val startMs = cue.str("startTimeMilliseconds")?.toLongOrNull()
                 ?: return@mapNotNull null
-            startMs to line
+            val endMs = cue.str("endTimeMilliseconds")?.toLongOrNull()?.takeIf { it > startMs }
+            TimedLyricCue(startMs = startMs, endMs = endMs, text = line)
         }
+    }
+
+    fun parseTranscriptCues(root: JsonObject): List<TimedLyricCue> {
+        val out = mutableListOf<TimedLyricCue>()
+        fun walk(el: JsonElement?) {
+            when (el) {
+                is JsonObject -> {
+                    val cue = el.obj("transcriptCueRenderer") ?: el.obj("transcriptSegmentRenderer")
+                    if (cue != null) {
+                        val startMs = cue.str("startOffsetMs")?.toLongOrNull()
+                            ?: cue.str("startMs")?.toLongOrNull()
+                        val durMs = cue.str("durationMs")?.toLongOrNull()
+                        val endMs = cue.str("endMs")?.toLongOrNull()
+                            ?: if (startMs != null && durMs != null && durMs > 0L) startMs + durMs else null
+                        val text = (cue.obj("cue")?.runsText()
+                            ?: cue.obj("snippet")?.runsText()
+                            ?: "")
+                            .replace('\n', ' ')
+                            .trim(' ', '\n', '♪')
+                            .trim()
+                        if (startMs != null && text.isNotEmpty()) {
+                            out += TimedLyricCue(startMs = startMs, endMs = endMs, text = text)
+                        }
+                    }
+                    for (value in el.values) walk(value)
+                }
+                is JsonArray -> {
+                    for (item in el) walk(item)
+                }
+                else -> Unit
+            }
+        }
+        walk(root)
+        return out.sortedBy { it.startMs }
     }
 
     fun parseAccountProfile(root: JsonObject): AccountProfile? {

@@ -60,6 +60,8 @@ data class PlaybackProgress(
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val bufferedMs: Long = 0L,
+    val sampledAtNanos: Long = System.nanoTime(),
+    val seekGeneration: Int = 0,
 )
 
 @Immutable
@@ -131,6 +133,7 @@ class MusicaPlaybackService : MediaSessionService() {
 
     // Guards against reacting to our own setMediaItems() calls in onMediaItemTransition
     private var suppressNextTransition: Boolean = false
+    private var seekGeneration: Int = 0
 
     // Tracks the sleepAfterTrack value already applied to ExoPlayer's timeline
     private var appliedSleepAfterTrack: Boolean = false
@@ -535,9 +538,16 @@ class MusicaPlaybackService : MediaSessionService() {
             activePlayer.currentPosition
         }
         if (currentPos > 3_500L) {
+            seekGeneration++
             if (activePlayer.playbackState == Player.STATE_IDLE) {
                 pendingResumePositionMs = 0L
-                _progress.update { it.copy(positionMs = 0L) }
+                _progress.update {
+                    it.copy(
+                        positionMs = 0L,
+                        sampledAtNanos = System.nanoTime(),
+                        seekGeneration = seekGeneration,
+                    )
+                }
                 scheduleSaveLastPlayed()
             } else {
                 activePlayer.seekTo(0L)
@@ -559,13 +569,20 @@ class MusicaPlaybackService : MediaSessionService() {
     fun seekTo(positionMs: Long) {
         cancelCrossfade()
         cancelSleepFade()
+        seekGeneration++
         val target = positionMs.coerceAtLeast(0L)
         if (activePlayer.playbackState == Player.STATE_IDLE && queueManager.currentSong != null) {
             pendingResumePositionMs = target
         } else {
             activePlayer.seekTo(target)
         }
-        _progress.update { it.copy(positionMs = target) }
+        _progress.update {
+            it.copy(
+                positionMs = target,
+                sampledAtNanos = System.nanoTime(),
+                seekGeneration = seekGeneration,
+            )
+        }
         syncUiState()
         scheduleSaveLastPlayed()
     }
@@ -798,6 +815,25 @@ class MusicaPlaybackService : MediaSessionService() {
     }
 
     private val playerListener = object : Player.Listener {
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int,
+        ) {
+            val internalForward = reason == Player.DISCONTINUITY_REASON_INTERNAL &&
+                newPosition.positionMs >= oldPosition.positionMs
+            if (!internalForward) {
+                seekGeneration++
+                _progress.update {
+                    it.copy(
+                        positionMs = newPosition.positionMs.coerceAtLeast(0L),
+                        sampledAtNanos = System.nanoTime(),
+                        seekGeneration = seekGeneration,
+                    )
+                }
+            }
+        }
+
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             if (isPlaying) {
                 consecutiveAutoSkips = 0
@@ -1157,13 +1193,20 @@ class MusicaPlaybackService : MediaSessionService() {
                     }
                     val buffered = activePlayer.bufferedPosition.coerceAtLeast(0L)
 
-                    val nextProgress = PlaybackProgress(
-                        positionMs = position,
-                        durationMs = duration,
-                        bufferedMs = buffered,
-                    )
-                    if (_progress.value != nextProgress) {
-                        _progress.value = nextProgress
+                    val cur = _progress.value
+                    val changed = active ||
+                        cur.positionMs != position ||
+                        cur.durationMs != duration ||
+                        cur.bufferedMs != buffered ||
+                        cur.seekGeneration != seekGeneration
+                    if (changed) {
+                        _progress.value = PlaybackProgress(
+                            positionMs = position,
+                            durationMs = duration,
+                            bufferedMs = buffered,
+                            sampledAtNanos = System.nanoTime(),
+                            seekGeneration = seekGeneration,
+                        )
                     }
                     if (active) {
                         maybeTriggerCrossfade(position, duration)

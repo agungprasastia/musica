@@ -278,11 +278,56 @@ enum class RepeatMode {
     ONE,
 }
 
-enum class LyricsSourceId(val displayName: String) {
-    BETTER_LYRICS("BetterLyrics"),
-    LYRICS_PLUS("LyricsPlus"),
-    LRCLIB("LRCLIB"),
-    YOUTUBE("YouTube Music"),
+enum class LyricsSourceId(
+    val displayName: String,
+    val supportsWordSync: Boolean = false,
+) {
+    LRC_RED("lrc.red", supportsWordSync = true),
+    BINI_LYRICS("BiniLyrics", supportsWordSync = true),
+    BETTER_LYRICS("BetterLyrics", supportsWordSync = true),
+    BETTER_LYRICS_PORTATO("BetterLyrics Portato", supportsWordSync = true),
+    LYRICS_PLUS("LyricsPlus", supportsWordSync = true),
+    UNISON("Unison", supportsWordSync = true),
+    YOUTUBE_CAPTIONS("YouTube Captions", supportsWordSync = false),
+    YOUTUBE("YouTube Music", supportsWordSync = false),
+    KUGOU("KuGou", supportsWordSync = false),
+    LRCLIB("LRCLIB", supportsWordSync = false),
+    MUSIXMATCH("Musixmatch", supportsWordSync = true),
+    GENIUS("Genius", supportsWordSync = false);
+
+    companion object {
+        /**
+         * Merges a user-saved provider order with the full declared registry so newly added
+         * providers slot in near their natural priority neighbor instead of sinking to the bottom.
+         */
+        fun mergeOrder(saved: List<LyricsSourceId>): List<LyricsSourceId> {
+            if (saved.isEmpty()) return entries.toList()
+            val result = saved.distinct().toMutableList()
+            val all = entries
+            for (i in all.indices) {
+                val candidate = all[i]
+                if (candidate in result) continue
+                // Find the closest declared predecessor already present and insert right after it,
+                // or before the closest declared successor if none precede it.
+                val predIdx = (i - 1 downTo 0).firstNotNullOfOrNull { p ->
+                    result.indexOf(all[p]).takeIf { it >= 0 }
+                }
+                if (predIdx != null) {
+                    result.add(predIdx + 1, candidate)
+                } else {
+                    val succIdx = ((i + 1) until all.size).firstNotNullOfOrNull { s ->
+                        result.indexOf(all[s]).takeIf { it >= 0 }
+                    }
+                    if (succIdx != null) {
+                        result.add(succIdx, candidate)
+                    } else {
+                        result.add(candidate)
+                    }
+                }
+            }
+            return result
+        }
+    }
 }
 
 enum class PlaybackSourceMode {

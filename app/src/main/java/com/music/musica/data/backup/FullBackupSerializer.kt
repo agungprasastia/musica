@@ -127,6 +127,8 @@ object FullBackupSerializer {
         "preferWordSyncedLyrics",
         "enabledLyricsSources",
         "lyricsSourceOrder",
+        "translationLanguage",
+        "showLyricsCardLogo",
     )
 
     fun encodeV2(backup: MusicaBackupV2): String =

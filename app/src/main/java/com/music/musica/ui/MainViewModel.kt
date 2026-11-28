@@ -30,8 +30,14 @@ import com.music.musica.core.model.UserPlaylist
 import com.music.musica.core.network.HttpClients
 import com.music.musica.core.settings.UserSettings
 import com.music.musica.data.backup.FullBackupSerializer
+import com.music.musica.data.lyrics.LyricLine
+import com.music.musica.data.lyrics.LyricsDisplayMode
+import com.music.musica.data.lyrics.LyricsProviderStatus
 import com.music.musica.data.lyrics.LyricsQuery
 import com.music.musica.data.lyrics.LyricsResult
+import com.music.musica.data.lyrics.LyricsTranslationEngine
+import com.music.musica.data.lyrics.LyricsTranslationOutcome
+import com.music.musica.R
 import com.music.musica.data.repository.ReplayPassSection
 import com.music.musica.data.repository.ReplaySummary
 import com.music.musica.data.repository.StoredTopPicks
@@ -171,7 +177,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // ---- Lyrics ----
     private val _lyricsState = MutableStateFlow<UiState<LyricsResult?>>(UiState.Success(null))
     val lyricsState: StateFlow<UiState<LyricsResult?>> = _lyricsState.asStateFlow()
+    private val _lyricsProviderStatuses = MutableStateFlow<Map<LyricsSourceId, LyricsProviderStatus>>(emptyMap())
+    val lyricsProviderStatuses: StateFlow<Map<LyricsSourceId, LyricsProviderStatus>> = _lyricsProviderStatuses.asStateFlow()
+    private val lyricsProviderResults = java.util.concurrent.ConcurrentHashMap<LyricsSourceId, LyricsResult>()
+    private var activeLyricsVideoId: String? = null
     private var lyricsJob: Job? = null
+    private var singleProviderJob: Job? = null
+
+    private val _lyricsDisplayMode = MutableStateFlow(LyricsDisplayMode.ORIGINAL)
+    val lyricsDisplayMode: StateFlow<LyricsDisplayMode> = _lyricsDisplayMode.asStateFlow()
+    private val _lyricsSubLines = MutableStateFlow<List<LyricLine>?>(null)
+    val lyricsSubLines: StateFlow<List<LyricLine>?> = _lyricsSubLines.asStateFlow()
+    private val _lyricsTranslationLoading = MutableStateFlow(false)
+    val lyricsTranslationLoading: StateFlow<Boolean> = _lyricsTranslationLoading.asStateFlow()
+    private val _lyricsTranslationNotice = MutableStateFlow<String?>(null)
+    val lyricsTranslationNotice: StateFlow<String?> = _lyricsTranslationNotice.asStateFlow()
+    private var translationJob: Job? = null
 
     // ---- Replay ----
     private val _replayPeriod = MutableStateFlow(ReplayPeriod.ALL_TIME)
@@ -998,31 +1019,191 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadLyricsFor(song: Song, forceSource: LyricsSourceId? = null) {
         lyricsJob?.cancel()
+        singleProviderJob?.cancel()
+        resetLyricsTranslationState()
+
+        if (activeLyricsVideoId != song.videoId) {
+            activeLyricsVideoId = song.videoId
+            lyricsProviderResults.clear()
+            _lyricsProviderStatuses.value = emptyMap()
+        }
+
         _lyricsState.value = UiState.Loading
         lyricsJob = viewModelScope.launch {
             val s = settings.value
+            val query = LyricsQuery(
+                videoId = song.videoId,
+                title = song.title,
+                artist = song.artists.firstOrNull()?.name ?: song.artistText,
+                album = song.album?.name,
+                durationMs = song.durationMs,
+            )
             val result = container.lyricsRepository.fetchLyrics(
-                query = LyricsQuery(
-                    videoId = song.videoId,
-                    title = song.title,
-                    artist = song.artists.firstOrNull()?.name ?: song.artistText,
-                    album = song.album?.name,
-                    durationMs = song.durationMs,
-                ),
+                query = query,
                 enabledSources = s.enabledLyricsSources,
                 priorityOrder = s.lyricsSourceOrder,
                 preferWordSynced = s.preferWordSyncedLyrics,
                 forceSource = forceSource,
+                onProviderStatus = { src, status, res ->
+                    if (activeLyricsVideoId == song.videoId) {
+                        if (res != null) lyricsProviderResults[src] = res
+                        _lyricsProviderStatuses.update { it + (src to status) }
+                    }
+                },
             )
-            _lyricsState.value = UiState.Success(result)
+            if (activeLyricsVideoId == song.videoId) {
+                if (result != null) {
+                    lyricsProviderResults[result.source] = result
+                    _lyricsProviderStatuses.update { it + (result.source to LyricsProviderStatus.FOUND) }
+                }
+                _lyricsState.value = UiState.Success(result)
+            }
         }
     }
 
+    fun selectOrFetchLyricsProvider(song: Song, source: LyricsSourceId) {
+        val cached = lyricsProviderResults[source]
+        if (cached != null && activeLyricsVideoId == song.videoId) {
+            resetLyricsTranslationState()
+            val curOffset = (_lyricsState.value as? UiState.Success)?.data?.offsetMs ?: cached.offsetMs
+            val applied = cached.copy(offsetMs = curOffset)
+            _lyricsState.value = UiState.Success(applied)
+            viewModelScope.launch {
+                container.lyricsRepository.saveOffset(song.videoId, curOffset)
+            }
+            return
+        }
+        singleProviderJob?.cancel()
+        _lyricsProviderStatuses.update { it + (source to LyricsProviderStatus.FETCHING) }
+        singleProviderJob = viewModelScope.launch {
+            val query = LyricsQuery(
+                videoId = song.videoId,
+                title = song.title,
+                artist = song.artists.firstOrNull()?.name ?: song.artistText,
+                album = song.album?.name,
+                durationMs = song.durationMs,
+            )
+            val fetched = container.lyricsRepository.fetchSingleProvider(query, source)
+            if (activeLyricsVideoId != song.videoId) return@launch
+            if (fetched != null) {
+                lyricsProviderResults[source] = fetched
+                _lyricsProviderStatuses.update { it + (source to LyricsProviderStatus.FOUND) }
+                resetLyricsTranslationState()
+                val curOffset = (_lyricsState.value as? UiState.Success)?.data?.offsetMs ?: 0L
+                _lyricsState.value = UiState.Success(fetched.copy(offsetMs = curOffset))
+            } else {
+                _lyricsProviderStatuses.update { it + (source to LyricsProviderStatus.NOT_FOUND) }
+            }
+        }
+    }
+
+    fun toggleLyricsRomanization() {
+        val currentSong = playerState.value.currentSong ?: return
+        val currentLines = (_lyricsState.value as? UiState.Success)?.data?.lines.orEmpty()
+        if (currentLines.isEmpty()) return
+
+        if (_lyricsDisplayMode.value == LyricsDisplayMode.ROMANIZED) {
+            resetLyricsTranslationState()
+            return
+        }
+
+        translationJob?.cancel()
+        _lyricsDisplayMode.value = LyricsDisplayMode.ROMANIZED
+        _lyricsSubLines.value = null
+        _lyricsTranslationLoading.value = true
+        _lyricsTranslationNotice.value = getApplication<Application>().getString(R.string.lyrics_romanizing)
+
+        translationJob = viewModelScope.launch {
+            val outcome = container.lyricsTranslationEngine.romanize(currentSong.videoId, currentLines)
+            _lyricsTranslationLoading.value = false
+            when (outcome) {
+                is LyricsTranslationOutcome.Success -> {
+                    _lyricsSubLines.value = outcome.lines
+                    _lyricsTranslationNotice.value = getApplication<Application>().getString(R.string.lyrics_romanized)
+                }
+                LyricsTranslationOutcome.AlreadyRomanized -> {
+                    _lyricsDisplayMode.value = LyricsDisplayMode.ORIGINAL
+                    _lyricsSubLines.value = null
+                    _lyricsTranslationNotice.value = getApplication<Application>().getString(R.string.lyrics_already_romanized)
+                }
+                is LyricsTranslationOutcome.AlreadyInTargetLanguage,
+                is LyricsTranslationOutcome.Failure,
+                -> {
+                    _lyricsDisplayMode.value = LyricsDisplayMode.ORIGINAL
+                    _lyricsSubLines.value = null
+                    _lyricsTranslationNotice.value = getApplication<Application>().getString(R.string.lyrics_translation_failed)
+                }
+            }
+        }
+    }
+
+    fun toggleLyricsTranslation() {
+        val currentSong = playerState.value.currentSong ?: return
+        val currentLines = (_lyricsState.value as? UiState.Success)?.data?.lines.orEmpty()
+        if (currentLines.isEmpty()) return
+
+        if (_lyricsDisplayMode.value == LyricsDisplayMode.TRANSLATED) {
+            resetLyricsTranslationState()
+            return
+        }
+
+        translationJob?.cancel()
+        val s = settings.value
+        val targetCode = LyricsTranslationEngine.resolveTargetLanguageCode(
+            explicitSetting = s.translationLanguage,
+            appLanguageTag = s.appLanguage.tag,
+        )
+        val targetLang = LyricsTranslationEngine.LANGUAGES.firstOrNull { it.code.equals(targetCode, ignoreCase = true) }
+        val targetName = targetLang?.displayName() ?: Locale.forLanguageTag(targetCode).displayName.ifBlank { targetCode }
+
+        _lyricsDisplayMode.value = LyricsDisplayMode.TRANSLATED
+        _lyricsSubLines.value = null
+        _lyricsTranslationLoading.value = true
+        _lyricsTranslationNotice.value = getApplication<Application>().getString(R.string.lyrics_translating_to, targetName)
+
+        translationJob = viewModelScope.launch {
+            val outcome = container.lyricsTranslationEngine.translate(
+                trackId = currentSong.videoId,
+                lines = currentLines,
+                targetLanguageCode = targetCode,
+                targetDisplayName = targetName,
+            )
+            _lyricsTranslationLoading.value = false
+            when (outcome) {
+                is LyricsTranslationOutcome.Success -> {
+                    _lyricsSubLines.value = outcome.lines
+                    _lyricsTranslationNotice.value = getApplication<Application>().getString(R.string.lyrics_translated_to, targetName)
+                }
+                is LyricsTranslationOutcome.AlreadyInTargetLanguage -> {
+                    _lyricsDisplayMode.value = LyricsDisplayMode.ORIGINAL
+                    _lyricsSubLines.value = null
+                    _lyricsTranslationNotice.value = getApplication<Application>().getString(R.string.lyrics_already_in_language, outcome.targetDisplayName)
+                }
+                LyricsTranslationOutcome.AlreadyRomanized,
+                is LyricsTranslationOutcome.Failure,
+                -> {
+                    _lyricsDisplayMode.value = LyricsDisplayMode.ORIGINAL
+                    _lyricsSubLines.value = null
+                    _lyricsTranslationNotice.value = getApplication<Application>().getString(R.string.lyrics_translation_failed)
+                }
+            }
+        }
+    }
+
+    private fun resetLyricsTranslationState() {
+        translationJob?.cancel()
+        _lyricsDisplayMode.value = LyricsDisplayMode.ORIGINAL
+        _lyricsSubLines.value = null
+        _lyricsTranslationLoading.value = false
+        _lyricsTranslationNotice.value = null
+    }
+
     fun updateLyricsOffset(offsetMs: Long) {
+        val clamped = offsetMs.coerceIn(-5_000L, 5_000L)
         val song = playerState.value.currentSong ?: return
         val current = (_lyricsState.value as? UiState.Success)?.data ?: return
-        _lyricsState.value = UiState.Success(current.copy(offsetMs = offsetMs))
-        viewModelScope.launch { container.lyricsRepository.saveOffset(song.videoId, offsetMs) }
+        _lyricsState.value = UiState.Success(current.copy(offsetMs = clamped))
+        viewModelScope.launch { container.lyricsRepository.saveOffset(song.videoId, clamped) }
     }
 
     // ---- Settings & Cache ----
@@ -1098,6 +1279,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         container.downloadRepository.applyWifiOnlyRequirement(enabled)
     }
     fun setPreferWordLyrics(prefer: Boolean) = viewModelScope.launch { container.settingsStore.setPreferWordSyncedLyrics(prefer) }
+    fun setTranslationLanguage(languageCode: String) = viewModelScope.launch { container.settingsStore.setTranslationLanguage(languageCode) }
+    fun setShowLyricsCardLogo(show: Boolean) = viewModelScope.launch { container.settingsStore.setShowLyricsCardLogo(show) }
     fun toggleLyricsSource(src: LyricsSourceId, enabled: Boolean) = viewModelScope.launch {
         container.settingsStore.toggleLyricsSource(src, enabled)
     }
