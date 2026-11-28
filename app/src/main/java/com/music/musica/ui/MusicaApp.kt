@@ -1076,6 +1076,7 @@ private fun SettingsOverlayHost(
         onSetPreferWordLyrics = vm::setPreferWordLyrics,
         onSetBlurUnfocusedLyrics = vm::setBlurUnfocusedLyrics,
         onSetShowLyricsPreview = vm::setShowLyricsPreviewStrip,
+        onSetTranslationLanguage = vm::setTranslationLanguage,
         onToggleLyricsSource = vm::toggleLyricsSource,
         onMoveLyricsSourceUp = vm::moveLyricsSourceUp,
         onSetAudioCacheLimitMb = vm::setAudioCacheLimitMb,
@@ -1193,6 +1194,11 @@ private fun NowPlayingOverlayHost(
 ) {
     val progress by vm.playbackProgress.collectAsStateWithLifecycle()
     val lyricsState by vm.lyricsState.collectAsStateWithLifecycle()
+    val lyricsProviderStatuses by vm.lyricsProviderStatuses.collectAsStateWithLifecycle()
+    val lyricsDisplayMode by vm.lyricsDisplayMode.collectAsStateWithLifecycle()
+    val lyricsSubLines by vm.lyricsSubLines.collectAsStateWithLifecycle()
+    val lyricsTranslationLoading by vm.lyricsTranslationLoading.collectAsStateWithLifecycle()
+    val lyricsTranslationNotice by vm.lyricsTranslationNotice.collectAsStateWithLifecycle()
     val currentSong = playerState.currentSong
 
     val liveLyricPreview = if (settings.showLyricsPreviewStrip) {
@@ -1216,17 +1222,28 @@ private fun NowPlayingOverlayHost(
         playerHazeState = playerHazeState,
         lyricsContent = { mod ->
             SyncedLyricsPanel(
+                song = currentSong,
                 lyricsState = lyricsState,
-                playerPositionMs = progress.positionMs,
+                progress = progress,
                 isPlaying = playerState.isPlaying,
                 playbackSpeed = playerState.playbackSpeed,
                 blurUnfocusedLyrics = settings.blurUnfocusedLyrics,
                 reduceAnimation = settings.reduceAnimation,
+                providerStatuses = lyricsProviderStatuses,
+                providerOrder = settings.lyricsSourceOrder,
+                displayMode = lyricsDisplayMode,
+                subLyricsLines = lyricsSubLines,
+                translationLoading = lyricsTranslationLoading,
+                translationNotice = lyricsTranslationNotice,
+                showLyricsCardLogo = settings.showLyricsCardLogo,
                 onSeekTo = { vm.container.playerController.seekTo(it) },
                 onChangeOffset = vm::updateLyricsOffset,
-                onSwitchProvider = { src ->
-                    currentSong?.let { vm.loadLyricsFor(it, forceSource = src) }
+                onSelectProvider = { src ->
+                    currentSong?.let { vm.selectOrFetchLyricsProvider(it, src) }
                 },
+                onToggleRomanize = vm::toggleLyricsRomanization,
+                onToggleTranslate = vm::toggleLyricsTranslation,
+                onSetShowLyricsCardLogo = vm::setShowLyricsCardLogo,
                 modifier = mod,
             )
         },

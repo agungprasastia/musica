@@ -350,4 +350,30 @@
     <string name="settings_backup_restored">Cadangan berhasil dipulihkan</string>
     <string name="settings_backup_failed">Gagal memproses file cadangan</string>
     <string name="library_ytm_playlist_badge">YouTube Music</string>
+
+    <!-- Pro Lyrics, Translation, Romanization & Share Card -->
+    <string name="lyrics_romanize">Romanisasi lirik</string>
+    <string name="lyrics_translate">Terjemahkan lirik</string>
+    <string name="lyrics_translating_to">Menerjemahkan ke %1$s…</string>
+    <string name="lyrics_romanizing">Meromanisasi lirik…</string>
+    <string name="lyrics_translated_to">Diterjemahkan ke %1$s</string>
+    <string name="lyrics_romanized">Pelafalan romanisasi</string>
+    <string name="lyrics_already_in_language">Lirik ini sudah dalam bahasa %1$s</string>
+    <string name="lyrics_already_romanized">Lirik ini sudah menggunakan huruf Latin</string>
+    <string name="lyrics_translation_failed">Gagal menerjemahkan lirik</string>
+    <string name="lyrics_provider_in_use">Sedang digunakan</string>
+    <string name="lyrics_provider_found">Lirik ditemukan · Ketuk untuk pakai</string>
+    <string name="lyrics_provider_fetching">Mencari lirik…</string>
+    <string name="lyrics_provider_not_found">Tidak ditemukan · Ketuk untuk coba lagi</string>
+    <string name="lyrics_provider_tap_to_fetch">Ketuk untuk mencari</string>
+    <string name="lyrics_share_title">Bagikan Lirik</string>
+    <string name="lyrics_share_format_story">Story (9:16)</string>
+    <string name="lyrics_share_format_card">Kartu</string>
+    <string name="lyrics_share_show_logo">Tampilkan logo Musica</string>
+    <string name="lyrics_share_card_full">Kartu penuh (batas 250 karakter)</string>
+    <string name="lyrics_share_saved">Kartu lirik disimpan ke Galeri</string>
+    <string name="lyrics_share_failed">Gagal mengekspor kartu lirik</string>
+    <string name="settings_translation_language">Bahasa Terjemahan</string>
+    <string name="settings_translation_auto">Otomatis (Bahasa aplikasi)</string>
+    <string name="settings_translation_search_hint">Cari bahasa…</string>
 </resources>

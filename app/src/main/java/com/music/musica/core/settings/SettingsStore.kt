@@ -50,6 +50,8 @@ data class UserSettings(
     val preferWordSyncedLyrics: Boolean = true,
     val enabledLyricsSources: Set<LyricsSourceId> = LyricsSourceId.entries.toSet(),
     val lyricsSourceOrder: List<LyricsSourceId> = LyricsSourceId.entries.toList(),
+    val translationLanguage: String = "",
+    val showLyricsCardLogo: Boolean = true,
 )
 
 class SettingsStore internal constructor(
@@ -84,17 +86,34 @@ class SettingsStore internal constructor(
         val PREFER_WORD_LYRICS = booleanPreferencesKey("prefer_word_lyrics")
         val ENABLED_LYRICS = stringPreferencesKey("enabled_lyrics")
         val LYRICS_ORDER = stringPreferencesKey("lyrics_order")
+        val TRANSLATION_LANGUAGE = stringPreferencesKey("translation_language")
+        val SHOW_LYRICS_CARD_LOGO = booleanPreferencesKey("show_lyrics_card_logo")
+        val LYRICS_SOURCES_MIGRATED_V2 = booleanPreferencesKey("lyrics_sources_v2")
     }
 
     val settings: Flow<UserSettings> = dataStore.data.map { prefs ->
         val enabledRaw = prefs[Keys.ENABLED_LYRICS]
+        val migratedV2 = prefs[Keys.LYRICS_SOURCES_MIGRATED_V2] ?: false
         val enabledLyrics = if (enabledRaw == null) {
             LyricsSourceId.entries.toSet()
         } else {
-            enabledRaw.split(",")
+            val saved = enabledRaw.split(",")
                 .filter { it.isNotBlank() }
                 .mapNotNull { runCatching { LyricsSourceId.valueOf(it) }.getOrNull() }
-                .toSet()
+                .toMutableSet()
+            if (!migratedV2) {
+                // Enable newly introduced keyless providers automatically when upgrading from the 4-provider schema.
+                val legacyIds = setOf(
+                    LyricsSourceId.BETTER_LYRICS,
+                    LyricsSourceId.LYRICS_PLUS,
+                    LyricsSourceId.LRCLIB,
+                    LyricsSourceId.YOUTUBE,
+                )
+                LyricsSourceId.entries.forEach { src ->
+                    if (src !in legacyIds) saved.add(src)
+                }
+            }
+            saved
         }
 
         val orderRaw = prefs[Keys.LYRICS_ORDER]
@@ -102,7 +121,7 @@ class SettingsStore internal constructor(
             ?.filter { it.isNotBlank() }
             ?.mapNotNull { runCatching { LyricsSourceId.valueOf(it) }.getOrNull() }
             .orEmpty()
-        val fullOrder = (savedOrder + LyricsSourceId.entries).distinct()
+        val fullOrder = LyricsSourceId.mergeOrder(savedOrder)
 
         UserSettings(
             onboardingCompleted = prefs[Keys.ONBOARDING_COMPLETED] ?: false,
@@ -137,6 +156,8 @@ class SettingsStore internal constructor(
             preferWordSyncedLyrics = prefs[Keys.PREFER_WORD_LYRICS] ?: true,
             enabledLyricsSources = enabledLyrics,
             lyricsSourceOrder = fullOrder,
+            translationLanguage = prefs[Keys.TRANSLATION_LANGUAGE] ?: "",
+            showLyricsCardLogo = prefs[Keys.SHOW_LYRICS_CARD_LOGO] ?: true,
         )
     }
 
@@ -244,15 +265,33 @@ class SettingsStore internal constructor(
                 ?.mapNotNull { runCatching { LyricsSourceId.valueOf(it) }.getOrNull() }
                 ?.toMutableSet()
                 ?: LyricsSourceId.entries.toMutableSet()
+            if (prefs[Keys.LYRICS_SOURCES_MIGRATED_V2] != true && prefs[Keys.ENABLED_LYRICS] != null) {
+                val legacyIds = setOf(
+                    LyricsSourceId.BETTER_LYRICS,
+                    LyricsSourceId.LYRICS_PLUS,
+                    LyricsSourceId.LRCLIB,
+                    LyricsSourceId.YOUTUBE,
+                )
+                LyricsSourceId.entries.forEach { if (it !in legacyIds) current.add(it) }
+            }
             if (enabled) current.add(source) else current.remove(source)
             prefs[Keys.ENABLED_LYRICS] = current.joinToString(",") { it.name }
+            prefs[Keys.LYRICS_SOURCES_MIGRATED_V2] = true
         }
     }
 
     suspend fun setLyricsSourceOrder(order: List<LyricsSourceId>) {
         dataStore.edit {
-            it[Keys.LYRICS_ORDER] = order.distinct().joinToString(",") { src -> src.name }
+            it[Keys.LYRICS_ORDER] = LyricsSourceId.mergeOrder(order).joinToString(",") { src -> src.name }
         }
+    }
+
+    suspend fun setTranslationLanguage(languageCode: String) {
+        dataStore.edit { it[Keys.TRANSLATION_LANGUAGE] = languageCode.trim() }
+    }
+
+    suspend fun setShowLyricsCardLogo(show: Boolean) {
+        dataStore.edit { it[Keys.SHOW_LYRICS_CARD_LOGO] = show }
     }
 
     suspend fun restoreFrom(restored: UserSettings) {
@@ -281,7 +320,10 @@ class SettingsStore internal constructor(
             prefs[Keys.PLAYBACK_SPEED] = restored.playbackSpeed.coerceIn(0.5f, 2.0f)
             prefs[Keys.PREFER_WORD_LYRICS] = restored.preferWordSyncedLyrics
             prefs[Keys.ENABLED_LYRICS] = restored.enabledLyricsSources.joinToString(",") { it.name }
-            prefs[Keys.LYRICS_ORDER] = restored.lyricsSourceOrder.joinToString(",") { it.name }
+            prefs[Keys.LYRICS_ORDER] = LyricsSourceId.mergeOrder(restored.lyricsSourceOrder).joinToString(",") { it.name }
+            prefs[Keys.TRANSLATION_LANGUAGE] = restored.translationLanguage
+            prefs[Keys.SHOW_LYRICS_CARD_LOGO] = restored.showLyricsCardLogo
+            prefs[Keys.LYRICS_SOURCES_MIGRATED_V2] = true
         }
     }
 }

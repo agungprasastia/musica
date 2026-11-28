@@ -86,6 +86,10 @@ import com.music.musica.core.model.LyricsSourceId
 import com.music.musica.core.model.PlayerTheme
 import com.music.musica.core.model.ThemeMode
 import com.music.musica.core.network.NetworkType
+import androidx.compose.material.icons.rounded.Translate
+import com.music.musica.data.lyrics.LyricsTranslationEngine
+import com.music.musica.ui.components.LiquidGlassSheet
+import androidx.compose.foundation.lazy.items
 import com.music.musica.core.settings.UserSettings
 import com.music.musica.ui.components.FrostedCircleButton
 import com.music.musica.ui.components.GlassDialogButton
@@ -145,6 +149,7 @@ fun SettingsScreen(
     onSetPreferWordLyrics: (Boolean) -> Unit,
     onSetBlurUnfocusedLyrics: (Boolean) -> Unit,
     onSetShowLyricsPreview: (Boolean) -> Unit,
+    onSetTranslationLanguage: (String) -> Unit = {},
     onToggleLyricsSource: (LyricsSourceId, Boolean) -> Unit,
     onMoveLyricsSourceUp: (LyricsSourceId) -> Unit,
     onSetAudioCacheLimitMb: (Int) -> Unit,
@@ -160,6 +165,7 @@ fun SettingsScreen(
     var confirmSignOut by remember { mutableStateOf(false) }
     var pickingWifiQuality by remember { mutableStateOf(false) }
     var pickingCellQuality by remember { mutableStateOf(false) }
+    var pickingTranslationLanguage by remember { mutableStateOf(false) }
     val screenHazeState = rememberHazeState()
 
     val q = searchQuery.trim().lowercase()
@@ -483,6 +489,24 @@ fun SettingsScreen(
                             checked = settings.showLyricsPreviewStrip,
                             onCheckedChange = onSetShowLyricsPreview,
                         )
+                        GroupDivider()
+                        val selectedTranslationLabel = remember(settings.translationLanguage) {
+                            if (settings.translationLanguage.isBlank()) {
+                                null
+                            } else {
+                                LyricsTranslationEngine.LANGUAGES
+                                    .firstOrNull { it.code.equals(settings.translationLanguage, ignoreCase = true) }
+                                    ?.displayName()
+                                    ?: settings.translationLanguage
+                            }
+                        } ?: stringResource(R.string.settings_translation_auto)
+                        SettingsValueRow(
+                            icon = Icons.Rounded.Translate,
+                            title = stringResource(R.string.settings_translation_language),
+                            value = selectedTranslationLabel,
+                            showChevron = true,
+                            onClick = { pickingTranslationLanguage = true },
+                        )
                         settings.lyricsSourceOrder.forEachIndexed { idx, source ->
                             GroupDivider()
                             Row(
@@ -747,6 +771,105 @@ fun SettingsScreen(
             onDismiss = { pickingCellQuality = false },
         )
     }
+
+    if (pickingTranslationLanguage) {
+        TranslationLanguagePickerSheet(
+            selectedCode = settings.translationLanguage,
+            hazeState = screenHazeState,
+            onSelect = { code ->
+                pickingTranslationLanguage = false
+                onSetTranslationLanguage(code)
+            },
+            onDismiss = { pickingTranslationLanguage = false },
+        )
+    }
+    }
+}
+
+@Composable
+private fun TranslationLanguagePickerSheet(
+    selectedCode: String,
+    hazeState: HazeState,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val searchState = rememberTextFieldState()
+    val query = searchState.text.toString().trim()
+    val autoLabel = stringResource(R.string.settings_translation_auto)
+    val allEntries = remember(autoLabel) {
+        listOf("" to autoLabel) + LyricsTranslationEngine.LANGUAGES.map { it.code to it.displayName() }
+            .sortedBy { it.second }
+    }
+    val filtered = remember(query, allEntries) {
+        if (query.isBlank()) allEntries
+        else allEntries.filter { (code, name) ->
+            name.contains(query, ignoreCase = true) || code.contains(query, ignoreCase = true)
+        }
+    }
+    val fg = glassContentColor()
+
+    LiquidGlassSheet(
+        hazeState = hazeState,
+        onDismiss = onDismiss,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 10.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_translation_language),
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                color = fg,
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(42.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(fg.copy(alpha = 0.08f))
+                    .padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Search,
+                    contentDescription = null,
+                    tint = fg.copy(alpha = 0.55f),
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                    if (query.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.settings_translation_search_hint),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = fg.copy(alpha = 0.50f),
+                        )
+                    }
+                    BasicTextField(
+                        state = searchState,
+                        lineLimits = TextFieldLineLimits.SingleLine,
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = fg),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().height(360.dp),
+                contentPadding = PaddingValues(bottom = 10.dp),
+            ) {
+                items(filtered, key = { it.first.ifBlank { "_auto" } }) { (code, label) ->
+                    LiquidGlassMenuRow(
+                        label = label,
+                        selected = code.equals(selectedCode, ignoreCase = true),
+                        onClick = { onSelect(code) },
+                    )
+                }
+            }
+        }
     }
 }
 

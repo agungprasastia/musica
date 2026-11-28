@@ -28,12 +28,21 @@ import com.music.musica.data.download.MusicaDownloadService
 import com.music.musica.data.innertube.InnertubeTrackingTransport
 import com.music.musica.data.innertube.MusicaInnertubeClient
 import com.music.musica.data.innertube.PlaybackTracker
+import com.music.musica.data.lyrics.BetterLyricsPortatoProvider
 import com.music.musica.data.lyrics.BetterLyricsProvider
+import com.music.musica.data.lyrics.BiniLyricsProvider
+import com.music.musica.data.lyrics.GeniusProvider
+import com.music.musica.data.lyrics.KuGouProvider
+import com.music.musica.data.lyrics.LrcRedProvider
 import com.music.musica.data.lyrics.LrclibProvider
 import com.music.musica.data.lyrics.LyricLine
 import com.music.musica.data.lyrics.LyricsPlusProvider
 import com.music.musica.data.lyrics.LyricsRepository
 import com.music.musica.data.lyrics.LyricsResult
+import com.music.musica.data.lyrics.LyricsTranslationEngine
+import com.music.musica.data.lyrics.MusixmatchProvider
+import com.music.musica.data.lyrics.UnisonProvider
+import com.music.musica.data.lyrics.YouTubeCaptionsProvider
 import com.music.musica.data.lyrics.YouTubeLyricsProvider
 import com.music.musica.data.repository.ArtistPortraitResolver
 import com.music.musica.data.repository.LibraryRepository
@@ -166,12 +175,24 @@ class AppContainer(context: Context) {
         downloadQualityKbpsProvider = { settingsState.value.downloadQuality.maxKbps },
     )
 
+    val lyricsTranslationEngine: LyricsTranslationEngine = LyricsTranslationEngine(
+        cacheDir = appContext.cacheDir,
+    )
+
     val lyricsRepository: LyricsRepository = LyricsRepository(
         providers = listOf(
+            LrcRedProvider(),
+            BiniLyricsProvider(),
             BetterLyricsProvider(),
+            BetterLyricsPortatoProvider(),
             LyricsPlusProvider(),
-            LrclibProvider(),
+            UnisonProvider(),
+            YouTubeCaptionsProvider(innertubeClient),
             YouTubeLyricsProvider(innertubeClient),
+            KuGouProvider(),
+            LrclibProvider(),
+            MusixmatchProvider(),
+            GeniusProvider(),
         ),
         cacheRead = { videoId ->
             database.lyricsCacheDao().get(videoId)?.let { cached ->

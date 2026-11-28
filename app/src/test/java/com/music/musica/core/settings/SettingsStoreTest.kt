@@ -112,10 +112,9 @@ class SettingsStoreTest {
 
         val mid = store.settings.first()
         assertFalse(LyricsSourceId.YOUTUBE in mid.enabledLyricsSources)
-        // Missing entries are appended in default order to keep full list intact
-        assertEquals(LyricsSourceId.LRCLIB, mid.lyricsSourceOrder[0])
-        assertEquals(LyricsSourceId.BETTER_LYRICS, mid.lyricsSourceOrder[1])
+        // Missing entries are merged around their declared priority neighbors while preserving relative user order
         assertEquals(LyricsSourceId.entries.size, mid.lyricsSourceOrder.size)
+        assertTrue(mid.lyricsSourceOrder.indexOf(LyricsSourceId.LRCLIB) < mid.lyricsSourceOrder.indexOf(LyricsSourceId.BETTER_LYRICS))
 
         val backup = UserSettings(
             themeMode = ThemeMode.LIGHT,
@@ -144,6 +143,6 @@ class SettingsStoreTest {
         assertFalse(restored.frostedGlassEnabled)
         assertTrue(restored.skipSilence)
         assertEquals(setOf(LyricsSourceId.LRCLIB), restored.enabledLyricsSources)
-        assertEquals(backup.lyricsSourceOrder, restored.lyricsSourceOrder)
+        assertEquals(LyricsSourceId.mergeOrder(backup.lyricsSourceOrder), restored.lyricsSourceOrder)
     }
 }

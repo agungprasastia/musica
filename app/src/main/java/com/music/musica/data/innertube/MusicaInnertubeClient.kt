@@ -206,6 +206,43 @@ class MusicaInnertubeClient(
         return if (!plain.isNullOrBlank()) YouTubeLyricsPayload(timedLines = emptyList(), plainText = plain) else null
     }
 
+    suspend fun fetchYouTubeTranscript(videoId: String): List<InnertubeParsers.TimedLyricCue> {
+        if (videoId.length != 11) return emptyList()
+        val params = encodeTranscriptParams(videoId)
+        val root = postYouTubeWeb("get_transcript") {
+            put("params", params)
+        } ?: return emptyList()
+        return InnertubeParsers.parseTranscriptCues(root)
+    }
+
+    private suspend fun postYouTubeWeb(
+        endpoint: String,
+        bodyBuilder: JsonObjectBuilder.() -> Unit,
+    ): JsonObject? {
+        val hl = normalizeLanguage(languageProvider())
+        val payload = buildJsonObject {
+            putJsonObject("context") {
+                putJsonObject("client") {
+                    put("clientName", "WEB")
+                    put("clientVersion", "2.20260101.01.00")
+                    put("hl", hl)
+                    put("gl", regionProvider())
+                }
+            }
+            bodyBuilder()
+        }
+        val response = http.post("https://www.youtube.com/youtubei/v1/$endpoint") {
+            parameter("prettyPrint", "false")
+            contentType(ContentType.Application.Json)
+            header("User-Agent", WEB_USER_AGENT)
+            header("Origin", "https://www.youtube.com")
+            header("Referer", "https://www.youtube.com/")
+            setBody(payload.toString())
+        }
+        if (response.status.value !in 200..299) return null
+        return runCatching { HttpClients.json.parseToJsonElement(response.bodyAsText()).jsonObject }.getOrNull()
+    }
+
     suspend fun setLikeStatus(videoId: String, status: LikeStatus): Boolean {
         if (cookieProvider().isNullOrBlank()) return false
         val endpoint = when (status) {
@@ -558,7 +595,7 @@ class MusicaInnertubeClient(
     }
 
     data class YouTubeLyricsPayload(
-        val timedLines: List<Pair<Long, String>>,
+        val timedLines: List<InnertubeParsers.TimedLyricCue>,
         val plainText: String?,
     )
 
@@ -598,5 +635,15 @@ class MusicaInnertubeClient(
 
         private fun acceptLanguageHeader(hl: String): String =
             if (hl.startsWith("en")) "en-US,en;q=0.9" else "$hl,en-US;q=0.8,en;q=0.7"
+
+        /** Encodes YouTube's `get_transcript` protobuf parameter: field 1 = videoId (length-delimited). */
+        private fun encodeTranscriptParams(videoId: String): String {
+            val idBytes = videoId.toByteArray(Charsets.UTF_8)
+            val raw = ByteArray(idBytes.size + 2)
+            raw[0] = 0x0A
+            raw[1] = idBytes.size.toByte()
+            System.arraycopy(idBytes, 0, raw, 2, idBytes.size)
+            return java.util.Base64.getUrlEncoder().encodeToString(raw)
+        }
     }
 }

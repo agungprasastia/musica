@@ -5,6 +5,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LyricsRepositoryTest {
@@ -72,33 +73,55 @@ class LyricsRepositoryTest {
     }
 
     @Test
-    fun fetchLyrics_ignoresDisabledCachedSourceAndCancelsSlowProviders() = runTest {
-        val wordSynced = LyricsResult(
-            source = LyricsSourceId.BETTER_LYRICS,
-            lines = listOf(LyricLine(0L, 1000L, "Fast", words = listOf(LyricWord(0L, 1000L, "Fast")))),
+    fun fetchLyrics_skipsLazyGeniusWhenSyncedFoundAndReportsProviderStatuses() = runTest {
+        val synced = LyricsResult(
+            source = LyricsSourceId.LRCLIB,
+            lines = listOf(LyricLine(1000L, 3000L, "Synced line")),
             isSynced = true,
-            isWordSynced = true,
+            isWordSynced = false,
         )
-        val fastProvider = FakeLyricsProvider(LyricsSourceId.BETTER_LYRICS, delayMs = 5L, result = wordSynced)
-        val slowProvider = FakeLyricsProvider(LyricsSourceId.LRCLIB, delayMs = 9_000L, result = null)
-        val disabledCache = LyricsResult(
-            source = LyricsSourceId.YOUTUBE,
-            lines = listOf(LyricLine(0L, 1000L, "Stale")),
-            isSynced = true,
-            isWordSynced = true,
+        val plain = LyricsResult(
+            source = LyricsSourceId.GENIUS,
+            lines = listOf(LyricLine(0L, 0L, "Plain genius")),
+            isSynced = false,
+            isWordSynced = false,
         )
+        val lrcProvider = FakeLyricsProvider(LyricsSourceId.LRCLIB, delayMs = 10L, result = synced)
+        val geniusProvider = FakeLyricsProvider(LyricsSourceId.GENIUS, delayMs = 5L, result = plain)
+        val statuses = mutableMapOf<LyricsSourceId, LyricsProviderStatus>()
 
-        val repo = LyricsRepository(
-            providers = listOf(fastProvider, slowProvider),
-            cacheRead = { disabledCache },
-        )
-
+        val repo = LyricsRepository(providers = listOf(lrcProvider, geniusProvider))
         val res = repo.fetchLyrics(
-            query = LyricsQuery("vid2", "Song", "Artist"),
-            enabledSources = setOf(LyricsSourceId.BETTER_LYRICS, LyricsSourceId.LRCLIB),
-            priorityOrder = listOf(LyricsSourceId.BETTER_LYRICS, LyricsSourceId.LRCLIB),
+            query = LyricsQuery("vid3", "Song", "Artist"),
+            enabledSources = setOf(LyricsSourceId.LRCLIB, LyricsSourceId.GENIUS),
+            priorityOrder = listOf(LyricsSourceId.LRCLIB, LyricsSourceId.GENIUS),
+            preferWordSynced = false,
+            onProviderStatus = { src, st, _ -> statuses[src] = st },
         )
-        assertEquals(LyricsSourceId.BETTER_LYRICS, res?.source)
-        assertEquals("Fast", res?.lines?.first()?.text)
+
+        assertEquals(LyricsSourceId.LRCLIB, res?.source)
+        assertEquals(0, geniusProvider.calls)
+        assertEquals(LyricsProviderStatus.FOUND, statuses[LyricsSourceId.LRCLIB])
+        assertEquals(LyricsProviderStatus.NOT_FETCHED, statuses[LyricsSourceId.GENIUS])
+    }
+
+    @Test
+    fun mergeOrder_slotsNewlyAddedProvidersBehindDeclaredPredecessor() {
+        val legacySaved = listOf(
+            LyricsSourceId.BETTER_LYRICS,
+            LyricsSourceId.LYRICS_PLUS,
+            LyricsSourceId.LRCLIB,
+            LyricsSourceId.YOUTUBE,
+        )
+        val merged = LyricsSourceId.mergeOrder(legacySaved)
+        assertEquals(LyricsSourceId.entries.size, merged.size)
+        // LRC_RED & BINI_LYRICS precede BETTER_LYRICS in declared order
+        assertTrue(merged.indexOf(LyricsSourceId.LRC_RED) < merged.indexOf(LyricsSourceId.BETTER_LYRICS))
+        assertTrue(merged.indexOf(LyricsSourceId.BINI_LYRICS) < merged.indexOf(LyricsSourceId.BETTER_LYRICS))
+        // BETTER_LYRICS_PORTATO slots immediately after BETTER_LYRICS
+        assertEquals(
+            merged.indexOf(LyricsSourceId.BETTER_LYRICS) + 1,
+            merged.indexOf(LyricsSourceId.BETTER_LYRICS_PORTATO),
+        )
     }
 }
