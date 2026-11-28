@@ -43,9 +43,11 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Info
@@ -55,8 +57,10 @@ import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.QueuePlayNext
 import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.ThumbDown
 import androidx.compose.material.icons.rounded.ThumbDownOffAlt
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -858,6 +862,10 @@ fun SongActionsSheet(
     isDisliked: Boolean = false,
     isDownloaded: Boolean,
     hazeState: HazeState? = null,
+    isNowPlayingContext: Boolean = false,
+    sleepTimerBadge: String? = null,
+    playbackSpeedBadge: String? = null,
+    lyricsOffsetBadge: String? = null,
     onDismiss: () -> Unit,
     onPlayNext: () -> Unit,
     onAddToQueue: () -> Unit,
@@ -870,6 +878,10 @@ fun SongActionsSheet(
     onGoToAlbum: (() -> Unit)?,
     onShare: () -> Unit,
     onShowStats: () -> Unit,
+    onOpenSleepTimer: (() -> Unit)? = null,
+    onOpenPlaybackSpeed: (() -> Unit)? = null,
+    onOpenEqualizer: (() -> Unit)? = null,
+    onOpenLyricsOffset: (() -> Unit)? = null,
 ) {
     val fg = glassContentColor()
     val secondaryFg = fg.copy(alpha = 0.68f)
@@ -977,6 +989,52 @@ fun SongActionsSheet(
                     onDismiss(); onGoToAlbum()
                 }
             }
+            if (isNowPlayingContext) {
+                HorizontalDivider(
+                    color = fg.copy(alpha = 0.14f),
+                    thickness = 0.5.dp,
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 4.dp),
+                )
+                if (onOpenSleepTimer != null) {
+                    SheetActionRow(
+                        icon = Icons.Rounded.Bedtime,
+                        label = stringResource(R.string.player_sleep_timer),
+                        tint = fg,
+                        badge = sleepTimerBadge,
+                    ) {
+                        onDismiss(); onOpenSleepTimer()
+                    }
+                }
+                if (onOpenPlaybackSpeed != null) {
+                    SheetActionRow(
+                        icon = Icons.Rounded.Speed,
+                        label = stringResource(R.string.player_speed_title),
+                        tint = fg,
+                        badge = playbackSpeedBadge,
+                    ) {
+                        onDismiss(); onOpenPlaybackSpeed()
+                    }
+                }
+                if (onOpenEqualizer != null) {
+                    SheetActionRow(
+                        icon = Icons.Rounded.Equalizer,
+                        label = stringResource(R.string.player_equalizer),
+                        tint = fg,
+                    ) {
+                        onDismiss(); onOpenEqualizer()
+                    }
+                }
+                if (onOpenLyricsOffset != null) {
+                    SheetActionRow(
+                        icon = Icons.Rounded.Tune,
+                        label = stringResource(R.string.menu_lyrics_offset),
+                        tint = fg,
+                        badge = lyricsOffsetBadge,
+                    ) {
+                        onDismiss(); onOpenLyricsOffset()
+                    }
+                }
+            }
             SheetActionRow(Icons.Rounded.Info, stringResource(R.string.menu_stats_for_nerds), tint = fg) {
                 onDismiss(); onShowStats()
             }
@@ -1016,6 +1074,7 @@ private fun SheetActionRow(
     icon: ImageVector,
     label: String,
     tint: Color = glassContentColor(),
+    badge: String? = null,
     onClick: () -> Unit,
 ) {
     Row(
@@ -1027,6 +1086,26 @@ private fun SheetActionRow(
     ) {
         Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(16.dp))
-        Text(text = label, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium), color = tint)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+            color = tint,
+            modifier = Modifier.weight(1f),
+        )
+        if (!badge.isNullOrBlank()) {
+            Spacer(Modifier.width(10.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(MusicaAccentRed.copy(alpha = 0.22f))
+                    .padding(horizontal = 10.dp, vertical = 3.dp),
+            ) {
+                Text(
+                    text = badge,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MusicaAccentRed,
+                )
+            }
+        }
     }
 }

@@ -1,6 +1,8 @@
 package com.music.musica.ui
 
+import android.Manifest
 import android.content.Intent
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -52,9 +54,13 @@ import com.music.musica.core.model.Song
 import com.music.musica.core.model.TopPick
 import com.music.musica.core.model.TopPickKind
 import com.music.musica.core.model.UiState
+import com.music.musica.core.model.formatDuration
 import com.music.musica.core.settings.UserSettings
-import com.music.musica.data.lyrics.SyncedLyricsParser
+import com.music.musica.data.lyrics.LyricsProviderStatus
+import com.music.musica.playback.AudioOutputRouter
+import com.music.musica.playback.AudioOutputSnapshot
 import com.music.musica.playback.PlayerUiState
+import com.music.musica.playback.rememberAudioOutputSnapshot
 import com.music.musica.ui.components.BottomFadeScrim
 import com.music.musica.ui.components.BrowseActionTarget
 import com.music.musica.ui.components.BrowseActionsSheet
@@ -67,11 +73,15 @@ import com.music.musica.ui.components.SongActionsSheet
 import com.music.musica.ui.navigation.AppRoute
 import com.music.musica.ui.onboarding.OnboardingScreen
 import com.music.musica.ui.onboarding.YtMusicLoginWebView
+import com.music.musica.ui.player.AudioOutputSheet
+import com.music.musica.ui.player.LyricsOffsetSheet
+import com.music.musica.ui.player.LyricsProviderSheet
 import com.music.musica.ui.player.NowPlayingSheet
 import com.music.musica.ui.player.PlaybackSpeedSheet
 import com.music.musica.ui.player.SleepTimerSheet
 import com.music.musica.ui.player.StatsForNerdsDialog
 import com.music.musica.ui.player.SyncedLyricsPanel
+import kotlin.math.abs
 import com.music.musica.ui.screens.DetailScreen
 import com.music.musica.ui.screens.DownloadsScreen
 import com.music.musica.ui.screens.ExploreScreen
@@ -127,11 +137,29 @@ internal fun MusicaAppRoot(
     }
 
     var actionMenuSong by remember { mutableStateOf<Song?>(null) }
+    var actionMenuFromPlayer by remember { mutableStateOf(false) }
     var browseActionTarget by remember { mutableStateOf<BrowseActionTarget?>(null) }
     var playlistPickerSong by remember { mutableStateOf<Song?>(null) }
     var showSpeedSheet by remember { mutableStateOf(false) }
     var showSleepSheet by remember { mutableStateOf(false) }
     var showStatsDialog by remember { mutableStateOf(false) }
+    var showLyricsOffsetSheet by remember { mutableStateOf(false) }
+    var showLyricsProviderSheet by remember { mutableStateOf(false) }
+    var showAudioOutputSheet by remember { mutableStateOf(false) }
+    var audioOutputRefreshKey by remember { mutableIntStateOf(0) }
+
+    val btPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {
+        audioOutputRefreshKey++
+    }
+
+    val thisPhoneLabel = stringResource(R.string.player_this_phone)
+    val audioOutputSnapshot = rememberAudioOutputSnapshot(
+        preferredDeviceId = playerState.preferredAudioDeviceId,
+        phoneLabel = thisPhoneLabel,
+        refreshKey = audioOutputRefreshKey,
+    )
 
     val homeListState = rememberLazyListState()
     val exploreListState = rememberLazyListState()
@@ -200,7 +228,18 @@ internal fun MusicaAppRoot(
             Toast.makeText(context, resources.getString(R.string.toast_added_queue), Toast.LENGTH_SHORT).show()
         }
     }
-    val onOpenSongMore = remember { { song: Song -> actionMenuSong = song } }
+    val onOpenSongMore = remember {
+        { song: Song ->
+            actionMenuFromPlayer = false
+            actionMenuSong = song
+        }
+    }
+    val onOpenPlayerSongMore = remember {
+        { song: Song ->
+            actionMenuFromPlayer = true
+            actionMenuSong = song
+        }
+    }
     val onOpenBrowseMore: (ShelfItem) -> Unit = remember {
         { item: ShelfItem ->
             BrowseActionTarget.fromShelfItem(item)?.let { browseActionTarget = it }
@@ -389,7 +428,16 @@ internal fun MusicaAppRoot(
                         onBack = { navigator.pop() },
                         onRetry = vm::retryTopDetail,
                         onLoadMoreTracks = vm::loadMoreDetail,
-                        onPlayTracks = vm::playTracks,
+                        onPlayTracks = { tracks, idx, shuffled ->
+                            val page = (topDetail.state as? UiState.Success)?.data
+                            vm.playTracks(
+                                tracks = tracks,
+                                startIndex = idx,
+                                shuffled = shuffled,
+                                sourceLabel = page?.title,
+                                sourceBrowseId = page?.browseId,
+                            )
+                        },
                         onDownloadAll = { songs, collectionId, collectionTitle ->
                             vm.downloadAll(songs, collectionId, collectionTitle)
                             Toast.makeText(context, resources.getString(R.string.toast_download_started), Toast.LENGTH_SHORT).show()
@@ -505,7 +553,10 @@ internal fun MusicaAppRoot(
             playlistPickerSong != null ||
             showSpeedSheet ||
             showSleepSheet ||
-            showStatsDialog
+            showStatsDialog ||
+            showLyricsOffsetSheet ||
+            showLyricsProviderSheet ||
+            showAudioOutputSheet
         val activeOverlayHazeState = if (nowPlayingExpanded && playerState.currentSong != null) {
             playerHazeState
         } else {
@@ -580,12 +631,20 @@ internal fun MusicaAppRoot(
                 playerState = playerState,
                 likedIds = likedIds,
                 settings = settings,
+                audioOutputSnapshot = audioOutputSnapshot,
                 playerHazeState = playerHazeState,
                 onDismiss = { nowPlayingExpanded = false },
-                onOpenMoreActions = onOpenSongMore,
-                onOpenSpeedSheet = { showSpeedSheet = true },
-                onOpenSleepTimerSheet = { showSleepSheet = true },
-                onOpenEqualizer = { onOpenEqualizer(playerState.audioSessionId) },
+                onOpenMoreActions = onOpenPlayerSongMore,
+                onOpenLyricsProviders = { showLyricsProviderSheet = true },
+                onOpenLyricsOffset = { showLyricsOffsetSheet = true },
+                onOpenAudioOutput = {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                        AudioOutputRouter.needsBluetoothConnectPermission(context)
+                    ) {
+                        btPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                    }
+                    showAudioOutputSheet = true
+                },
                 onOpenStatsForNerds = { showStatsDialog = true },
             )
         }
@@ -594,13 +653,35 @@ internal fun MusicaAppRoot(
         // Rendered inside the root Box so live Haze refracts the page or NowPlaying album art behind them.
 
         actionMenuSong?.let { song ->
+            val lyricsStateForBadge by vm.lyricsState.collectAsStateWithLifecycle()
+            val lyricsOffsetMs = (lyricsStateForBadge as? UiState.Success)?.data?.offsetMs ?: 0L
+            val sleepBadge = when {
+                playerState.sleepAfterTrack -> stringResource(R.string.player_sleep_end_of_track)
+                (playerState.sleepTimerRemainingMs ?: 0L) > 0L -> formatDuration(playerState.sleepTimerRemainingMs ?: 0L)
+                else -> null
+            }
+            val speedBadge = if (abs(playerState.playbackSpeed - 1.0f) > 0.01f) {
+                "${"%.2f".format(playerState.playbackSpeed).trimEnd('0').trimEnd('.')}×"
+            } else null
+            val offsetBadge = if (lyricsOffsetMs != 0L) {
+                val sign = if (lyricsOffsetMs > 0L) "+" else ""
+                "$sign${"%.1f".format(lyricsOffsetMs / 1000f)}s"
+            } else null
+
             SongActionsSheet(
                 song = song,
                 isLiked = song.videoId in likedIds,
                 isDisliked = song.videoId in dislikedIds,
                 isDownloaded = song.videoId in downloadedIds,
                 hazeState = activeOverlayHazeState,
-                onDismiss = { actionMenuSong = null },
+                isNowPlayingContext = actionMenuFromPlayer,
+                sleepTimerBadge = sleepBadge,
+                playbackSpeedBadge = speedBadge,
+                lyricsOffsetBadge = offsetBadge,
+                onDismiss = {
+                    actionMenuSong = null
+                    actionMenuFromPlayer = false
+                },
                 onPlayNext = { onPlayNextWithToast(song) },
                 onAddToQueue = { onAddToQueueWithToast(song) },
                 onStartRadio = {
@@ -630,6 +711,10 @@ internal fun MusicaAppRoot(
                 },
                 onShare = { onShareSong(song) },
                 onShowStats = { showStatsDialog = true },
+                onOpenSleepTimer = if (actionMenuFromPlayer) ({ showSleepSheet = true }) else null,
+                onOpenPlaybackSpeed = if (actionMenuFromPlayer) ({ showSpeedSheet = true }) else null,
+                onOpenEqualizer = if (actionMenuFromPlayer) ({ onOpenEqualizer(playerState.audioSessionId) }) else null,
+                onOpenLyricsOffset = if (actionMenuFromPlayer) ({ showLyricsOffsetSheet = true }) else null,
             )
         }
 
@@ -770,6 +855,54 @@ internal fun MusicaAppRoot(
                 stats = liveStats,
                 hazeState = activeOverlayHazeState,
                 onDismiss = { showStatsDialog = false },
+            )
+        }
+
+        if (showLyricsOffsetSheet) {
+            val lyricsStateForOffset by vm.lyricsState.collectAsStateWithLifecycle()
+            val currentOffset = (lyricsStateForOffset as? UiState.Success)?.data?.offsetMs ?: 0L
+            LyricsOffsetSheet(
+                currentOffsetMs = currentOffset,
+                hazeState = activeOverlayHazeState,
+                onCommitOffset = vm::updateLyricsOffset,
+                onDismiss = { showLyricsOffsetSheet = false },
+            )
+        }
+
+        if (showLyricsProviderSheet) {
+            val lyricsStateForProvider by vm.lyricsState.collectAsStateWithLifecycle()
+            val providerStatuses by vm.lyricsProviderStatuses.collectAsStateWithLifecycle()
+            val currentSong = playerState.currentSong
+            LyricsProviderSheet(
+                currentSource = (lyricsStateForProvider as? UiState.Success)?.data?.source,
+                providerOrder = settings.lyricsSourceOrder,
+                providerStatuses = providerStatuses,
+                hazeState = activeOverlayHazeState,
+                onSelect = { src ->
+                    if (currentSong != null) {
+                        vm.selectOrFetchLyricsProvider(currentSong, src)
+                        if (providerStatuses[src] == LyricsProviderStatus.FOUND) {
+                            showLyricsProviderSheet = false
+                        }
+                    }
+                },
+                onDismiss = { showLyricsProviderSheet = false },
+            )
+        }
+
+        if (showAudioOutputSheet) {
+            AudioOutputSheet(
+                devices = audioOutputSnapshot.devices,
+                activeDeviceId = audioOutputSnapshot.activeDevice?.id,
+                needsBluetoothPermission = AudioOutputRouter.needsBluetoothConnectPermission(context),
+                hazeState = activeOverlayHazeState,
+                onSelectDevice = vm::setPreferredAudioDevice,
+                onRequestBluetoothPermission = {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        btPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                    }
+                },
+                onDismiss = { showAudioOutputSheet = false },
             )
         }
     }
@@ -929,6 +1062,7 @@ private fun LibraryTabHost(
     onAddToQueue: (Song) -> Unit,
 ) {
     val likedSongs by vm.likedSongs.collectAsStateWithLifecycle()
+    val likedSongsLabel = stringResource(R.string.library_liked_songs)
     val localPlaylists by vm.localPlaylists.collectAsStateWithLifecycle()
     val remoteLibrary by vm.remoteLibrary.collectAsStateWithLifecycle()
     val replaySummary by vm.allTimeReplaySummary.collectAsStateWithLifecycle()
@@ -957,7 +1091,9 @@ private fun LibraryTabHost(
         bottomPadding = bottomPadding,
         listState = listState,
         onRefresh = vm::refreshLibrary,
-        onPlayLiked = { idx -> vm.playTracks(likedSongs, idx, shuffled = false) },
+        onPlayLiked = { idx ->
+            vm.playTracks(likedSongs, idx, shuffled = false, sourceLabel = likedSongsLabel)
+        },
         onOpenPlaylist = vm::openLocalPlaylist,
         onCreatePlaylist = vm::createPlaylist,
         onTogglePinPlaylist = vm::togglePlaylistPin,
@@ -1110,6 +1246,7 @@ private fun HistoryOverlayHost(
     onSongMore: (Song) -> Unit,
 ) {
     val recentHistory by vm.recentHistory.collectAsStateWithLifecycle()
+    val historyLabel = stringResource(R.string.library_history)
     HistoryScreen(
         events = recentHistory,
         activeVideoId = activeVideoId,
@@ -1119,7 +1256,7 @@ private fun HistoryOverlayHost(
         bottomPadding = bottomPadding,
         onBack = onBack,
         onClearHistory = vm::clearHistory,
-        onPlaySong = { vm.container.playerController.playSong(it) },
+        onPlaySong = { vm.container.playerController.playSong(it, sourceLabel = historyLabel) },
         onSongMore = onSongMore,
     )
 }
@@ -1136,6 +1273,7 @@ private fun ReplayOverlayHost(
     val replayPeriod by vm.replayPeriod.collectAsStateWithLifecycle()
     val replaySummary by vm.replaySummary.collectAsStateWithLifecycle()
     val landingSection by vm.replayLandingSection.collectAsStateWithLifecycle()
+    val replayLabel = stringResource(R.string.replay_title)
     ReplayScreen(
         period = replayPeriod,
         summary = replaySummary,
@@ -1146,7 +1284,9 @@ private fun ReplayOverlayHost(
         bottomPadding = bottomPadding,
         onSelectPeriod = vm::selectReplayPeriod,
         onBack = onBack,
-        onPlayTopSongs = { songs, idx -> vm.playTracks(songs, idx, shuffled = false) },
+        onPlayTopSongs = { songs, idx ->
+            vm.playTracks(songs, idx, shuffled = false, sourceLabel = replayLabel)
+        },
         onOpenArtist = { artistId -> vm.openDetail(artistId) },
         onOpenAlbum = { albumId -> vm.openDetail(albumId) },
     )
@@ -1163,6 +1303,7 @@ private fun DownloadsOverlayHost(
 ) {
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val networkType by vm.networkType.collectAsStateWithLifecycle()
+    val downloadsLabel = stringResource(R.string.library_downloads)
     DownloadsScreen(
         downloads = downloads,
         wifiOnlyDownloads = settings.wifiOnlyDownloads,
@@ -1171,7 +1312,9 @@ private fun DownloadsOverlayHost(
         frostedGlassEnabled = frostedGlassEnabled,
         bottomPadding = bottomPadding,
         onBack = onBack,
-        onPlayTracks = { songs, idx -> vm.playTracks(songs, idx, shuffled = false) },
+        onPlayTracks = { songs, idx ->
+            vm.playTracks(songs, idx, shuffled = false, sourceLabel = downloadsLabel)
+        },
         onRetryDownload = vm::retryDownload,
         onCancelDownload = vm::cancelDownload,
         onRemoveDownload = vm::removeDownload,
@@ -1184,12 +1327,13 @@ private fun NowPlayingOverlayHost(
     playerState: PlayerUiState,
     likedIds: Set<String>,
     settings: UserSettings,
+    audioOutputSnapshot: AudioOutputSnapshot,
     playerHazeState: HazeState,
     onDismiss: () -> Unit,
     onOpenMoreActions: (Song) -> Unit,
-    onOpenSpeedSheet: () -> Unit,
-    onOpenSleepTimerSheet: () -> Unit,
-    onOpenEqualizer: () -> Unit,
+    onOpenLyricsProviders: () -> Unit,
+    onOpenLyricsOffset: () -> Unit,
+    onOpenAudioOutput: () -> Unit,
     onOpenStatsForNerds: () -> Unit,
 ) {
     val progress by vm.playbackProgress.collectAsStateWithLifecycle()
@@ -1200,27 +1344,26 @@ private fun NowPlayingOverlayHost(
     val lyricsTranslationLoading by vm.lyricsTranslationLoading.collectAsStateWithLifecycle()
     val lyricsTranslationNotice by vm.lyricsTranslationNotice.collectAsStateWithLifecycle()
     val currentSong = playerState.currentSong
-
-    val liveLyricPreview = if (settings.showLyricsPreviewStrip) {
-        val synced = (lyricsState as? UiState.Success)?.data?.takeIf { it.isSynced && it.lines.isNotEmpty() }
-        if (synced != null) {
-            val idx = SyncedLyricsParser.activeLineIndex(synced.lines, progress.positionMs, synced.offsetMs)
-            synced.lines.getOrNull(idx)?.text
-        } else null
-    } else null
+    var lyricsPickingActive by remember(currentSong?.videoId) { mutableStateOf(false) }
 
     NowPlayingSheet(
         playerState = playerState,
         progress = progress,
         isLiked = currentSong != null && currentSong.videoId in likedIds,
+        lyricsState = lyricsState,
+        lyricsDisplayMode = lyricsDisplayMode,
+        lyricsTranslationNotice = lyricsTranslationNotice,
+        activeAudioOutput = audioOutputSnapshot.activeDevice,
         playerTheme = settings.playerTheme,
         fullBleedCoverArt = settings.fullBleedCoverArt,
         showVolumeSlider = settings.showVolumeSlider,
         showRemainingTime = settings.showRemainingTime,
-        currentLyricPreview = liveLyricPreview,
+        showLyricsPreviewStrip = settings.showLyricsPreviewStrip,
         reduceAnimation = settings.reduceAnimation,
         playerHazeState = playerHazeState,
-        lyricsContent = { mod ->
+        lyricsPickingActive = lyricsPickingActive,
+        onLyricsPickingChange = { lyricsPickingActive = it },
+        lyricsContent = { mod, captureBackdrop ->
             SyncedLyricsPanel(
                 song = currentSong,
                 lyricsState = lyricsState,
@@ -1236,6 +1379,12 @@ private fun NowPlayingOverlayHost(
                 translationLoading = lyricsTranslationLoading,
                 translationNotice = lyricsTranslationNotice,
                 showLyricsCardLogo = settings.showLyricsCardLogo,
+                showInlineChips = false,
+                externalPickingActive = lyricsPickingActive,
+                onPickingActiveChange = { lyricsPickingActive = it },
+                captureBackdropBitmap = captureBackdrop,
+                onRequestOpenProviderSheet = onOpenLyricsProviders,
+                onRequestOpenOffsetSheet = onOpenLyricsOffset,
                 onSeekTo = { vm.container.playerController.seekTo(it) },
                 onChangeOffset = vm::updateLyricsOffset,
                 onSelectProvider = { src ->
@@ -1263,10 +1412,10 @@ private fun NowPlayingOverlayHost(
         onClearUpcomingQueue = { vm.container.playerController.clearUpcomingQueue() },
         onGoToArtist = { artistId -> vm.openDetail(artistId) },
         onGoToAlbum = { albumId -> vm.openDetail(albumId) },
+        onOpenSourceBrowse = { browseId -> vm.openDetail(browseId) },
         onOpenMoreActions = onOpenMoreActions,
-        onOpenSpeedSheet = onOpenSpeedSheet,
-        onOpenSleepTimerSheet = onOpenSleepTimerSheet,
-        onOpenEqualizer = onOpenEqualizer,
+        onOpenLyricsProviders = onOpenLyricsProviders,
+        onOpenAudioOutput = onOpenAudioOutput,
         onOpenStatsForNerds = onOpenStatsForNerds,
     )
 }

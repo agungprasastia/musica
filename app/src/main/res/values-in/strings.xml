@@ -376,4 +376,51 @@
     <string name="settings_translation_language">Bahasa Terjemahan</string>
     <string name="settings_translation_auto">Otomatis (Bahasa aplikasi)</string>
     <string name="settings_translation_search_hint">Cari bahasa…</string>
+
+    <!-- Full-Bleed Now Playing, Live Strip & Audio Output -->
+    <string name="player_playing_from">Memutar dari %1$s</string>
+    <string name="player_source_queue">Antrean</string>
+    <string name="player_audio_output">Output Audio</string>
+    <string name="player_this_phone">Perangkat ini</string>
+    <string name="player_audio_output_active">Aktif</string>
+    <string name="player_audio_output_auto">Bawaan sistem</string>
+    <string name="player_audio_output_bt_hint">Izinkan akses Bluetooth untuk melihat nama headphone dan speaker yang terhubung.</string>
+    <string name="player_audio_output_allow_bt">Izinkan Bluetooth</string>
+    <string name="player_repeat">Ulangi</string>
+    <string name="player_lyrics_by">Lirik oleh %1$s</string>
+    <string name="player_lyrics_not_available">Lirik tidak tersedia</string>
+    <string name="player_lyrics_open">Buka lirik</string>
+    <string name="player_lyrics_instrumental">Instrumental</string>
+    <string name="player_lyrics_none_found">Lirik tidak ditemukan</string>
+    <string name="menu_lyrics_offset">Penyesuaian Lirik</string>
+
+    <string-array name="lyrics_loading_lines">
+        <item>Memeriksa arsip</item>
+        <item>Mencari kata-katanya</item>
+        <item>Menyimak nadanya</item>
+        <item>Membuka catatan album</item>
+        <item>Menyelaraskan reff</item>
+        <item>Mengumpulkan bait</item>
+        <item>Membaca sampul dalam</item>
+        <item>Menyinkronkan tiap suku kata</item>
+        <item>Menjemput lirik terbaik</item>
+        <item>Menyiapkan mikrofon</item>
+        <item>Membentangkan lembaran lirik</item>
+        <item>Menghubungkan lirik lagu</item>
+    </string-array>
+
+    <string-array name="lyrics_intro_lines">
+        <item>Lagu segera dimulai</item>
+        <item>Membangun suasana</item>
+        <item>Bass dulu, kata-kata menyusul</item>
+        <item>Tunggu vokal masuk</item>
+        <item>Nikmati intronyanya dulu</item>
+        <item>Vokal sebentar lagi</item>
+        <item>Memanaskan melodi</item>
+        <item>Tepat setelah intro ini</item>
+        <item>Rasakan iramanya dulu</item>
+        <item>Bait pertama bersiap</item>
+        <item>Instrumen membuka lagu</item>
+        <item>Lirik hadir sebentar lagi</item>
+    </string-array>
 </resources>

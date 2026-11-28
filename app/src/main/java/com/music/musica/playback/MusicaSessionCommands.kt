@@ -35,6 +35,7 @@ internal object MusicaSessionCommands {
     const val CMD_PAUSE_SLEEP_TIMER = "com.music.musica.cmd.PAUSE_SLEEP_TIMER"
     const val CMD_CLEAR_ERROR = "com.music.musica.cmd.CLEAR_ERROR"
     const val CMD_UPDATE_SLEEP_UI = "com.music.musica.cmd.UPDATE_SLEEP_UI"
+    const val CMD_SET_PREFERRED_AUDIO_DEVICE = "com.music.musica.cmd.SET_PREFERRED_AUDIO_DEVICE"
 
     const val ARG_HANDOFF_ID = "handoff_id"
     const val ARG_INDEX = "index"
@@ -46,6 +47,7 @@ internal object MusicaSessionCommands {
     const val ARG_REMAINING_MS = "remaining_ms"
     const val ARG_HAS_REMAINING = "has_remaining"
     const val ARG_AFTER_TRACK = "after_track"
+    const val ARG_DEVICE_ID = "device_id"
 
     val ALL_COMMANDS: List<SessionCommand> = listOf(
         CMD_PLAY_QUEUE,
@@ -68,20 +70,29 @@ internal object MusicaSessionCommands {
         CMD_PAUSE_SLEEP_TIMER,
         CMD_CLEAR_ERROR,
         CMD_UPDATE_SLEEP_UI,
+        CMD_SET_PREFERRED_AUDIO_DEVICE,
     ).map { SessionCommand(it, Bundle.EMPTY) }
 
     data class QueuePayload(
         val songs: List<Song>,
         val startIndex: Int = 0,
         val shuffled: Boolean? = null,
+        val sourceLabel: String? = null,
+        val sourceBrowseId: String? = null,
     )
 
     private val queuePayloads = ConcurrentHashMap<String, QueuePayload>()
     private val songPayloads = ConcurrentHashMap<String, Song>()
 
-    fun putQueuePayload(songs: List<Song>, startIndex: Int, shuffled: Boolean?): String {
+    fun putQueuePayload(
+        songs: List<Song>,
+        startIndex: Int,
+        shuffled: Boolean?,
+        sourceLabel: String? = null,
+        sourceBrowseId: String? = null,
+    ): String {
         val id = UUID.randomUUID().toString()
-        queuePayloads[id] = QueuePayload(songs, startIndex, shuffled)
+        queuePayloads[id] = QueuePayload(songs, startIndex, shuffled, sourceLabel, sourceBrowseId)
         if (queuePayloads.size > 16) {
             queuePayloads.keys.firstOrNull { it != id }?.let { queuePayloads.remove(it) }
         }

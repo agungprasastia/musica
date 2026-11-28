@@ -427,7 +427,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (songs.isEmpty()) {
                     onFailure()
                 } else {
-                    container.playerController.playQueue(songs, startIndex = 0, shuffled = false)
+                    container.playerController.playQueue(
+                        songs = songs,
+                        startIndex = 0,
+                        shuffled = false,
+                        sourceLabel = pick.title,
+                        sourceBrowseId = pick.browseId ?: pick.artistBrowseId,
+                    )
                 }
             } finally {
                 if (_activeTopPickLoadingKey.value == pickKey && topPickPlayGeneration.get() == requestId) {
@@ -816,14 +822,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---- Playback, Library & Lyrics ----
 
-    fun handleShelfItemClick(item: ShelfItem, contextTracks: List<Song> = emptyList()) {
+    fun handleShelfItemClick(
+        item: ShelfItem,
+        contextTracks: List<Song> = emptyList(),
+        sourceLabel: String? = null,
+        sourceBrowseId: String? = null,
+    ) {
         when (item) {
             is ShelfItem.Track -> {
+                val effectiveLabel = sourceLabel ?: item.song.album?.name
+                val effectiveBrowseId = sourceBrowseId ?: item.song.album?.browseId
                 if (contextTracks.isNotEmpty()) {
                     val idx = contextTracks.indexOfFirst { it.videoId == item.song.videoId }.coerceAtLeast(0)
-                    container.playerController.playQueue(contextTracks, idx, shuffled = false)
+                    container.playerController.playQueue(
+                        songs = contextTracks,
+                        startIndex = idx,
+                        shuffled = false,
+                        sourceLabel = effectiveLabel,
+                        sourceBrowseId = effectiveBrowseId,
+                    )
                 } else {
-                    container.playerController.playSong(item.song)
+                    container.playerController.playSong(
+                        song = item.song,
+                        sourceLabel = effectiveLabel,
+                        sourceBrowseId = effectiveBrowseId,
+                    )
                 }
             }
             is ShelfItem.Album -> openDetail(item.browseId)
@@ -832,9 +855,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun playTracks(tracks: List<Song>, startIndex: Int, shuffled: Boolean) {
+    fun playTracks(
+        tracks: List<Song>,
+        startIndex: Int,
+        shuffled: Boolean,
+        sourceLabel: String? = null,
+        sourceBrowseId: String? = null,
+    ) {
         if (tracks.isEmpty()) return
-        container.playerController.playQueue(tracks, startIndex, shuffled = shuffled)
+        container.playerController.playQueue(
+            songs = tracks,
+            startIndex = startIndex,
+            shuffled = shuffled,
+            sourceLabel = sourceLabel,
+            sourceBrowseId = sourceBrowseId,
+        )
+    }
+
+    fun setPreferredAudioDevice(deviceId: Int?) {
+        container.playerController.setPreferredAudioDevice(deviceId)
     }
 
     fun toggleLike(song: Song) {
@@ -850,7 +889,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val related = container.ytMusicRepository.upNext(song.videoId, "RDAMVM${song.videoId}")
                 .filterNot { it.videoId == song.videoId }
             val queue = listOf(song) + related
-            container.playerController.playQueue(queue, startIndex = 0, shuffled = false)
+            container.playerController.playQueue(
+                songs = queue,
+                startIndex = 0,
+                shuffled = false,
+                sourceLabel = "${song.title} Radio",
+            )
         }
     }
 
@@ -936,7 +980,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val tracks = resolveTracksForTarget(target)
             if (tracks.isNotEmpty()) {
-                container.playerController.playQueue(tracks, startIndex = 0, shuffled = shuffled)
+                container.playerController.playQueue(
+                    songs = tracks,
+                    startIndex = 0,
+                    shuffled = shuffled,
+                    sourceLabel = target.title,
+                    sourceBrowseId = target.browseId,
+                )
             }
         }
     }
