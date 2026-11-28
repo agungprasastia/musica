@@ -21,6 +21,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -511,19 +512,29 @@ fun PillSegmentedControl(
     val isDark = onDarkBackdrop || MaterialTheme.colorScheme.background.luminance() < 0.5f
     val haptics = LocalHapticFeedback.current
     val shape = RoundedCornerShape(percent = 50)
+    val hasSelection = selectedIndex in options.indices
+    val compactLabels = options.size >= 5
     val thumbColor = when {
         onDarkBackdrop -> Color.White.copy(alpha = 0.24f)
+        !isDark -> Color.White
         glassEnabled -> glassIndicatorColor()
-        isDark -> Color(0xFF636366)
-        else -> Color.White
+        else -> Color(0xFF636366)
     }
     val thumbRim = rememberGlassRimBrush(isDark)
+    val trackModifier = if (!isDark && !onDarkBackdrop) {
+        Modifier
+            .clip(shape)
+            .background(Color(0xFFE6E6EE).copy(alpha = if (glassEnabled) 0.86f else 0.96f))
+            .border(0.75.dp, Color.Black.copy(alpha = 0.08f), shape)
+    } else {
+        Modifier.lightweightGlass(shape = shape, enabled = glassEnabled, onDarkBackdrop = onDarkBackdrop)
+    }
 
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
             .height(40.dp)
-            .lightweightGlass(shape = shape, enabled = glassEnabled, onDarkBackdrop = onDarkBackdrop)
+            .then(trackModifier)
             .padding(3.dp),
     ) {
         val segWidth = maxWidth / options.size
@@ -533,17 +544,23 @@ fun PillSegmentedControl(
             label = "pill_seg_offset",
         )
 
-        Box(
-            modifier = Modifier
-                .offset { IntOffset(offset.roundToPx(), 0) }
-                .width(segWidth)
-                .fillMaxHeight()
-                .clip(shape)
-                .background(thumbColor)
-                .then(
-                    if (glassEnabled) Modifier.border(0.65.dp, thumbRim, shape) else Modifier,
-                ),
-        )
+        if (hasSelection) {
+            Box(
+                modifier = Modifier
+                    .offset { IntOffset(offset.roundToPx(), 0) }
+                    .width(segWidth)
+                    .fillMaxHeight()
+                    .clip(shape)
+                    .background(thumbColor)
+                    .then(
+                        when {
+                            !isDark && !onDarkBackdrop -> Modifier.border(0.65.dp, Color.Black.copy(alpha = 0.10f), shape)
+                            glassEnabled -> Modifier.border(0.65.dp, thumbRim, shape)
+                            else -> Modifier
+                        },
+                    ),
+            )
+        }
 
         Row(modifier = Modifier.fillMaxSize()) {
             options.forEachIndexed { idx, label ->
@@ -576,13 +593,14 @@ fun PillSegmentedControl(
                     Text(
                         text = label,
                         style = MaterialTheme.typography.labelMedium.copy(
+                            fontSize = if (compactLabels) 11.sp else 12.sp,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                         ),
                         color = textColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 6.dp),
+                        modifier = Modifier.padding(horizontal = if (compactLabels) 2.dp else 6.dp),
                     )
                 }
             }
@@ -832,7 +850,8 @@ fun AnimatedSignInBanner(
     reduceAnimation: Boolean = false,
 ) {
     val shape = RoundedCornerShape(22.dp)
-    var pressed by remember { mutableStateOf(false) }
+    val buttonInteraction = remember { MutableInteractionSource() }
+    val pressed by buttonInteraction.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (pressed) 0.985f else 1f,
         animationSpec = spring(stiffness = 480f, dampingRatio = 0.78f),
@@ -875,10 +894,8 @@ fun AnimatedSignInBanner(
             )
             Spacer(Modifier.height(16.dp))
             Button(
-                onClick = {
-                    pressed = true
-                    onSignIn()
-                },
+                onClick = onSignIn,
+                interactionSource = buttonInteraction,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color.White,
                     contentColor = Color.Black,
@@ -889,6 +906,8 @@ fun AnimatedSignInBanner(
                 Text(
                     text = stringResource(R.string.onboarding_sign_in_google),
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }

@@ -102,7 +102,7 @@ fun MiniPlayer(
     val secondaryColor = contentColor.copy(alpha = 0.68f)
     val barHeight = if (isInline) 48.dp else 50.dp
     val artSize = if (isInline) 30.dp else 32.dp
-    val glyphSlot = if (isInline) 34.dp else 40.dp
+    val glyphSlot = if (isInline) 38.dp else 40.dp
     val playGlyphSize = if (isInline) 24.dp else 28.dp
 
     val titleStyle = MaterialTheme.typography.titleMedium.copy(
@@ -274,7 +274,7 @@ fun MiniPlayer(
                 }
 
                 if (!isInline) {
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(6.dp))
                     Box(
                         modifier = Modifier
                             .size(glyphSlot)

@@ -41,6 +41,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -58,7 +60,6 @@ import com.music.musica.ui.components.ArtworkImage
 import com.music.musica.ui.components.FrostedCircleButton
 import com.music.musica.ui.components.LocalLiquidGlassEnabled
 import com.music.musica.ui.components.PillSegmentedControl
-import com.music.musica.ui.components.TopFadeBlur
 import com.music.musica.ui.components.glassCard
 import com.music.musica.ui.components.lightweightGlass
 import com.music.musica.ui.theme.MusicaAccentRed
@@ -181,10 +182,11 @@ fun DownloadsScreen(
                         .padding(horizontal = 16.dp, vertical = 6.dp),
                 )
 
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 if (selectedTab == 0) {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = bottomPadding + 22.dp),
+                        contentPadding = PaddingValues(top = 6.dp, bottom = bottomPadding + 22.dp),
                     ) {
                         itemsIndexed(downloads, key = { _, d -> d.song.videoId }) { _, item ->
                             val completedIndex = completedSongs.indexOfFirst { it.videoId == item.song.videoId }
@@ -240,12 +242,14 @@ fun DownloadsScreen(
                                         LinearProgressIndicator(
                                             progress = { item.progressPercent / 100f },
                                             color = MusicaAccentRed,
+                                            trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f),
                                             modifier = Modifier.fillMaxWidth(),
                                         )
                                     } else if (item.state == DownloadState.QUEUED && !waitingForWifi) {
                                         Spacer(Modifier.height(4.dp))
                                         LinearProgressIndicator(
                                             color = MusicaAccentRed,
+                                            trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f),
                                             modifier = Modifier.fillMaxWidth(),
                                         )
                                     }
@@ -284,7 +288,7 @@ fun DownloadsScreen(
                         contentPadding = PaddingValues(
                             start = 16.dp,
                             end = 16.dp,
-                            top = 6.dp,
+                            top = 10.dp,
                             bottom = bottomPadding + 22.dp,
                         ),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -344,14 +348,23 @@ fun DownloadsScreen(
                         }
                     }
                 }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(14.dp)
+                        .align(Alignment.TopCenter)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.background,
+                                    Color.Transparent,
+                                ),
+                            ),
+                        ),
+                )
+                }
             }
         }
-
-        TopFadeBlur(
-            hazeState = hazeState,
-            frostedGlassEnabled = frostedGlassEnabled,
-            modifier = Modifier.align(Alignment.TopCenter),
-        )
     }
 }
 

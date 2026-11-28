@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.music.musica.R
 import com.music.musica.core.model.ReplayPeriod
 import com.music.musica.core.model.Song
@@ -339,16 +340,19 @@ fun ReplayScreen(
                             StatGlassCard(
                                 value = summary.distinctSongs.toString(),
                                 label = stringResource(R.string.replay_habits_songs),
+                                compact = true,
                                 modifier = Modifier.weight(1f),
                             )
                             StatGlassCard(
                                 value = summary.distinctArtists.toString(),
                                 label = stringResource(R.string.replay_habits_artists),
+                                compact = true,
                                 modifier = Modifier.weight(1f),
                             )
                             StatGlassCard(
                                 value = summary.distinctAlbums.toString(),
                                 label = stringResource(R.string.replay_habits_albums),
+                                compact = true,
                                 modifier = Modifier.weight(1f),
                             )
                         }
@@ -386,14 +390,34 @@ private fun StatGlassCard(
     value: String,
     label: String,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
     Column(
         modifier = modifier
             .glassCard(RoundedCornerShape(20.dp), onDarkBackdrop = true)
-            .padding(18.dp),
+            .padding(
+                horizontal = if (compact) 12.dp else 18.dp,
+                vertical = if (compact) 14.dp else 18.dp,
+            ),
     ) {
-        Text(value, style = MaterialTheme.typography.displayLarge, color = Color.White)
+        Text(
+            text = value,
+            style = if (compact) {
+                MaterialTheme.typography.headlineMedium.copy(fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            } else {
+                MaterialTheme.typography.displayLarge
+            },
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
         Spacer(Modifier.height(4.dp))
-        Text(label, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.78f))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = Color.White.copy(alpha = 0.78f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }

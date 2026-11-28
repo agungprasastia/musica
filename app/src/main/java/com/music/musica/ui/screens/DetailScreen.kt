@@ -104,7 +104,7 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 
-private enum class TrackSortOrder {
+enum class TrackSortOrder {
     DEFAULT,
     TITLE_ASC,
     TITLE_DESC,
@@ -145,6 +145,7 @@ fun DetailScreen(
     onSongMore: (Song) -> Unit,
     onPlayNext: (Song) -> Unit,
     onAddToQueue: (Song) -> Unit,
+    onRequestOpenSortMenu: ((TrackSortOrder, (TrackSortOrder) -> Unit) -> Unit)? = null,
 ) {
     val page = (state as? UiState.Success)?.data
     val palette = rememberArtworkPalette(
@@ -168,6 +169,12 @@ fun DetailScreen(
     var sortOrder by remember(page?.browseId) { mutableStateOf(TrackSortOrder.DEFAULT) }
     var aboutExpanded by remember(page?.browseId) { mutableStateOf(false) }
     val detailHazeState = rememberHazeState()
+
+    LaunchedEffect(searchOpen) {
+        if (searchOpen && listState.firstVisibleItemIndex > 1) {
+            listState.animateScrollToItem(1)
+        }
+    }
 
     val hasContinuation = !page?.continuation.isNullOrBlank()
     val currentLoadingMore by rememberUpdatedState(isLoadingMore)
@@ -359,12 +366,12 @@ fun DetailScreen(
                                     )
                                 }
                                 if (filterQuery.isNotEmpty()) {
-                                    IconButton(onClick = { filterState.clearText() }, modifier = Modifier.size(26.dp)) {
+                                    IconButton(onClick = { filterState.clearText() }, modifier = Modifier.size(38.dp)) {
                                         Icon(
                                             imageVector = Icons.Rounded.Close,
                                             contentDescription = stringResource(R.string.action_clear),
                                             tint = palette.onBackgroundVariant,
-                                            modifier = Modifier.size(16.dp),
+                                            modifier = Modifier.size(18.dp),
                                         )
                                     }
                                 }
@@ -411,7 +418,7 @@ fun DetailScreen(
                             items = indexedTracks,
                             key = { idx, pair -> "trk_${idx}_${pair.second.videoId}" },
                         ) { listIdx, (originalNumber, song) ->
-                            val playIdx = detail.tracks.indexOfFirst { it.videoId == song.videoId }.coerceAtLeast(0)
+                            val playIdx = (originalNumber - 1).coerceIn(0, detail.tracks.lastIndex)
                             SongRow(
                                 song = song,
                                 isActive = song.videoId == activeVideoId,
@@ -423,6 +430,34 @@ fun DetailScreen(
                                 onPlayNext = { onPlayNext(song) },
                                 onAddToQueue = { onAddToQueue(song) },
                             )
+                        }
+                    } else if (!isArtist && detail.tracks.isNotEmpty() && filterQuery.isNotBlank()) {
+                        item(key = "detail_filter_empty") {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 40.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.detail_filter_empty, filterQuery.trim()),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = palette.onBackgroundVariant,
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+                        }
+                    } else if (!isArtist && detail.tracks.isEmpty() && detail.sections.isEmpty()) {
+                        item(key = "detail_empty_tracks") {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 48.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.musica_empty_state),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = palette.onBackgroundVariant,
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
                         }
                     }
 
@@ -597,7 +632,13 @@ fun DetailScreen(
                         hazeState = detailHazeState,
                         frostedGlassEnabled = frostedGlassEnabled,
                         liveBlur = true,
-                        onClick = { sortMenuOpen = true },
+                        onClick = {
+                            if (onRequestOpenSortMenu != null) {
+                                onRequestOpenSortMenu(sortOrder) { chosen -> sortOrder = chosen }
+                            } else {
+                                sortMenuOpen = true
+                            }
+                        },
                     )
                 }
             } else {
@@ -691,6 +732,21 @@ private fun ArtistHeroHeader(
                 )
             }
 
+            // Protective top status-bar & floating-button scrim over bright full-bleed artist photography
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            0.00f to Color.Black.copy(alpha = 0.46f),
+                            0.58f to Color.Black.copy(alpha = 0.16f),
+                            1.00f to Color.Transparent,
+                        ),
+                    )
+                    .statusBarsPadding()
+                    .height(74.dp),
+            )
+
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -738,37 +794,39 @@ private fun ArtistHeroHeader(
             horizontalArrangement = Arrangement.spacedBy(22.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .lightweightGlass(CircleShape)
-                    .clickable(onClick = onShuffle),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Shuffle,
-                    contentDescription = stringResource(R.string.action_shuffle),
-                    tint = palette.onBackground,
-                    modifier = Modifier.size(22.dp),
-                )
-            }
+            if (detail.tracks.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .lightweightGlass(CircleShape)
+                        .clickable(onClick = onShuffle),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Shuffle,
+                        contentDescription = stringResource(R.string.action_shuffle),
+                        tint = palette.onBackground,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
 
-            val playOnBg = if (palette.onBackground.luminance() > 0.5f) Color.Black else Color.White
-            Box(
-                modifier = Modifier
-                    .size(68.dp)
-                    .shadow(14.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.35f))
-                    .clip(CircleShape)
-                    .background(palette.onBackground)
-                    .clickable(onClick = onPlay),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.PlayArrow,
-                    contentDescription = stringResource(R.string.action_play),
-                    tint = playOnBg,
-                    modifier = Modifier.size(36.dp),
-                )
+                val playOnBg = if (palette.onBackground.luminance() > 0.5f) Color.Black else Color.White
+                Box(
+                    modifier = Modifier
+                        .size(68.dp)
+                        .shadow(14.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.35f))
+                        .clip(CircleShape)
+                        .background(palette.onBackground)
+                        .clickable(onClick = onPlay),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.PlayArrow,
+                        contentDescription = stringResource(R.string.action_play),
+                        tint = playOnBg,
+                        modifier = Modifier.size(36.dp),
+                    )
+                }
             }
 
             Box(
@@ -780,7 +838,9 @@ private fun ArtistHeroHeader(
             ) {
                 Icon(
                     imageVector = if (starred) Icons.Rounded.Star else Icons.Rounded.StarOutline,
-                    contentDescription = null,
+                    contentDescription = stringResource(
+                        if (starred) R.string.menu_subscribed else R.string.menu_subscribe,
+                    ),
                     tint = if (starred) palette.accent else palette.onBackground,
                     modifier = Modifier.size(24.dp),
                 )
@@ -857,13 +917,24 @@ private fun ReleaseHeroHeader(
         val totalMs = detail.tracks.sumOf { it.durationMs }
         (totalMs / 60_000L).toInt()
     }
+    val cleanedSubtitle = remember(detail.subtitle, detail.artist, onArtistClick) {
+        val raw = detail.subtitle.orEmpty().trim()
+        val artistName = if (detail.artist != null && onArtistClick != null) detail.artist.name.trim() else ""
+        if (raw.isBlank() || artistName.isBlank()) {
+            raw
+        } else {
+            val parts = raw.split("•", "·")
+                .map { it.trim() }
+                .filter { it.isNotEmpty() && !it.equals(artistName, ignoreCase = true) }
+            parts.joinToString(" • ")
+        }
+    }
     val metaLine = buildString {
-        val rawSub = detail.subtitle.orEmpty()
-        if (rawSub.isNotBlank()) append(rawSub)
-        val alreadyHasCounts = rawSub.contains("song", ignoreCase = true) ||
-            rawSub.contains("lagu", ignoreCase = true) ||
-            rawSub.contains("min", ignoreCase = true) ||
-            rawSub.contains("mnt", ignoreCase = true)
+        if (cleanedSubtitle.isNotBlank()) append(cleanedSubtitle)
+        val alreadyHasCounts = cleanedSubtitle.contains("song", ignoreCase = true) ||
+            cleanedSubtitle.contains("lagu", ignoreCase = true) ||
+            cleanedSubtitle.contains("min", ignoreCase = true) ||
+            cleanedSubtitle.contains("mnt", ignoreCase = true)
         if (!alreadyHasCounts && detail.tracks.isNotEmpty()) {
             if (isNotEmpty()) append(" · ")
             append(pluralStringResource(R.plurals.library_songs_count, detail.tracks.size, detail.tracks.size))
@@ -883,31 +954,49 @@ private fun ReleaseHeroHeader(
             val fullBleedUrl = remember(detail.thumbnailUrl, useRawFallback) {
                 if (useRawFallback) detail.thumbnailUrl else upsizeArtworkUrl(detail.thumbnailUrl, 900)
             }
-            AsyncImage(
-                model = fullBleedUrl,
-                contentDescription = detail.title,
-                contentScale = ContentScale.Crop,
-                onError = {
-                    if (!useRawFallback && fullBleedUrl != detail.thumbnailUrl) {
-                        useRawFallback = true
-                    }
-                },
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                    .drawWithContent {
-                        drawContent()
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                0.00f to Color.Black,
-                                0.58f to Color.Black,
+                    .aspectRatio(1f),
+            ) {
+                AsyncImage(
+                    model = fullBleedUrl,
+                    contentDescription = detail.title,
+                    contentScale = ContentScale.Crop,
+                    onError = {
+                        if (!useRawFallback && fullBleedUrl != detail.thumbnailUrl) {
+                            useRawFallback = true
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                        .drawWithContent {
+                            drawContent()
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    0.00f to Color.Black,
+                                    0.58f to Color.Black,
+                                    1.00f to Color.Transparent,
+                                ),
+                                blendMode = BlendMode.DstIn,
+                            )
+                        },
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                0.00f to Color.Black.copy(alpha = 0.46f),
+                                0.58f to Color.Black.copy(alpha = 0.16f),
                                 1.00f to Color.Transparent,
                             ),
-                            blendMode = BlendMode.DstIn,
                         )
-                    },
-            )
+                        .statusBarsPadding()
+                        .height(74.dp),
+                )
+            }
         } else {
             Spacer(Modifier.statusBarsPadding().height(56.dp))
             ArtworkImage(

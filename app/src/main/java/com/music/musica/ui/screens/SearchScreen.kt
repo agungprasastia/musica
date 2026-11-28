@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -57,6 +58,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -77,7 +80,6 @@ import com.music.musica.ui.components.PillSegmentedControl
 import com.music.musica.ui.components.ROW_DIVIDER_INSET
 import com.music.musica.ui.components.SongListSkeleton
 import com.music.musica.ui.components.SongRow
-import com.music.musica.ui.components.TopFadeBlur
 import com.music.musica.ui.components.glassCard
 import com.music.musica.ui.components.glassContentColor
 import com.music.musica.ui.components.lightweightGlass
@@ -103,8 +105,8 @@ fun SearchScreen(
     isLoadingMore: Boolean = false,
     activeVideoId: String?,
     downloadedIds: Set<String>,
-    hazeState: HazeState,
-    frostedGlassEnabled: Boolean,
+    @Suppress("UNUSED_PARAMETER") hazeState: HazeState,
+    @Suppress("UNUSED_PARAMETER") frostedGlassEnabled: Boolean,
     reduceAnimation: Boolean,
     bottomPadding: Dp,
     listState: LazyListState = rememberLazyListState(),
@@ -178,23 +180,26 @@ fun SearchScreen(
                     .padding(horizontal = 16.dp)
                     .height(48.dp)
                     .lightweightGlass(RoundedCornerShape(percent = 50))
-                    .padding(horizontal = 16.dp),
+                    .padding(start = 6.dp, end = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.Search,
-                    contentDescription = stringResource(R.string.tab_search),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .size(20.dp)
-                        .clickable {
-                            if (query.isNotBlank()) {
-                                keyboard?.hide()
-                                onSubmitQuery(query)
-                            }
-                        },
-                )
-                Spacer(Modifier.width(10.dp))
+                IconButton(
+                    onClick = {
+                        if (query.isNotBlank()) {
+                            keyboard?.hide()
+                            onSubmitQuery(query)
+                        }
+                    },
+                    modifier = Modifier.size(40.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = stringResource(R.string.tab_search),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+                Spacer(Modifier.width(2.dp))
                 Box(modifier = Modifier.weight(1f)) {
                     if (query.isEmpty()) {
                         Text(
@@ -224,7 +229,7 @@ fun SearchScreen(
                             queryState.clearText()
                             onQueryChange("")
                         },
-                        modifier = Modifier.size(28.dp),
+                        modifier = Modifier.size(40.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Close,
@@ -233,6 +238,8 @@ fun SearchScreen(
                             modifier = Modifier.size(18.dp),
                         )
                     }
+                } else {
+                    Spacer(Modifier.width(10.dp))
                 }
             }
 
@@ -248,10 +255,11 @@ fun SearchScreen(
                 Spacer(Modifier.height(8.dp))
             }
 
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = bottomPadding + 22.dp),
+                contentPadding = PaddingValues(top = 6.dp, bottom = bottomPadding + 22.dp),
             ) {
                 if (results == null) {
                     if (query.isNotBlank() && suggestions.isNotEmpty()) {
@@ -528,13 +536,22 @@ fun SearchScreen(
                     }
                 }
             }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(14.dp)
+                    .align(Alignment.TopCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.background,
+                                Color.Transparent,
+                            ),
+                        ),
+                    ),
+            )
+            }
         }
-
-        TopFadeBlur(
-            hazeState = hazeState,
-            frostedGlassEnabled = frostedGlassEnabled,
-            modifier = Modifier.align(Alignment.TopCenter),
-        )
     }
 }
 
@@ -599,7 +616,11 @@ private fun TopResultCard(
             }
         }
         Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Button(
                 onClick = onClick,
                 colors = ButtonDefaults.buttonColors(
@@ -607,33 +628,42 @@ private fun TopResultCard(
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                 ),
                 shape = RoundedCornerShape(percent = 50),
-                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier.heightIn(min = 40.dp),
             ) {
                 Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(4.dp))
-                Text(stringResource(R.string.action_play), style = MaterialTheme.typography.labelLarge)
+                Text(
+                    text = stringResource(R.string.action_play),
+                    style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             if (onQueue != null) {
                 val fg = glassContentColor()
                 Row(
                     modifier = Modifier
-                        .height(40.dp)
+                        .weight(1f, fill = false)
+                        .heightIn(min = 40.dp)
                         .lightweightGlass(RoundedCornerShape(percent = 50))
                         .clickable(onClick = onQueue)
-                        .padding(horizontal = 16.dp),
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.QueueMusic,
                         contentDescription = null,
                         tint = fg,
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(17.dp),
                     )
                     Spacer(Modifier.width(6.dp))
                     Text(
                         text = stringResource(R.string.menu_add_to_queue),
                         style = MaterialTheme.typography.labelLarge,
                         color = fg,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }

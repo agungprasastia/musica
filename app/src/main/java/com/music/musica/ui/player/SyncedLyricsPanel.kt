@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -215,6 +216,7 @@ fun SyncedLyricsPanel(
     captureBackdropBitmap: (suspend () -> Bitmap?)? = null,
     onRequestOpenProviderSheet: (() -> Unit)? = null,
     onRequestOpenOffsetSheet: (() -> Unit)? = null,
+    onRequestOpenShareSheet: ((Song, List<LyricsShareLine>, Bitmap?) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
@@ -662,10 +664,17 @@ fun SyncedLyricsPanel(
             }
         }
 
-        // Capture live player backdrop when opening share sheet
+        // Capture live player backdrop when opening share sheet (hoist to root overlay when wired)
         LaunchedEffect(sharePickedLines) {
-            if (sharePickedLines != null) {
-                capturedBackdrop = runCatching { captureBackdropBitmap?.invoke() }.getOrNull()
+            val picked = sharePickedLines
+            if (picked != null) {
+                val bmp = runCatching { captureBackdropBitmap?.invoke() }.getOrNull()
+                if (onRequestOpenShareSheet != null && song != null) {
+                    sharePickedLines = null
+                    onRequestOpenShareSheet(song, picked, bmp)
+                } else {
+                    capturedBackdrop = bmp
+                }
             } else {
                 capturedBackdrop = null
             }
@@ -698,7 +707,7 @@ fun SyncedLyricsPanel(
         }
 
         val pendingShare = sharePickedLines
-        if (pendingShare != null && song != null) {
+        if (pendingShare != null && song != null && onRequestOpenShareSheet == null) {
             LyricsShareSheet(
                 song = song,
                 pickedLines = pendingShare,
@@ -1617,7 +1626,7 @@ private fun LyricsPickBar(
             modifier = Modifier
                 .clip(RoundedCornerShape(percent = 50))
                 .clickable(onClick = onCancel)
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(horizontal = 14.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -1634,7 +1643,7 @@ private fun LyricsPickBar(
                 .clip(RoundedCornerShape(percent = 50))
                 .background(if (selectedCount > 0) Color.White else Color.White.copy(alpha = 0.25f))
                 .clickable(enabled = selectedCount > 0, onClick = onShare)
-                .padding(horizontal = 14.dp, vertical = 6.dp),
+                .padding(horizontal = 16.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -1726,7 +1735,11 @@ fun LyricsOffsetSheet(
                     text = stringResource(R.string.lyrics_offset_title),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = fg,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
+                Spacer(Modifier.width(10.dp))
                 GlassDialogButton(
                     text = stringResource(R.string.lyrics_offset_reset),
                     onClick = {
@@ -1808,7 +1821,10 @@ fun LyricsProviderSheet(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
             )
             LazyColumn(
-                modifier = Modifier.fillMaxWidth().height(380.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false)
+                    .heightIn(max = 380.dp),
                 contentPadding = PaddingValues(bottom = 10.dp),
             ) {
                 itemsIndexed(ordered, key = { _, src -> src.name }) { _, src ->

@@ -2,6 +2,7 @@ package com.music.musica.ui
 
 import android.Manifest
 import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -37,6 +38,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
@@ -66,22 +68,30 @@ import com.music.musica.ui.components.BrowseActionTarget
 import com.music.musica.ui.components.BrowseActionsSheet
 import com.music.musica.ui.components.FloatingBarsTapGuard
 import com.music.musica.ui.components.FloatingGlassNavBar
+import com.music.musica.ui.components.GlassDialogButton
+import com.music.musica.ui.components.LiquidGlassDialog
+import com.music.musica.ui.components.LiquidGlassMenuRow
+import com.music.musica.ui.components.LiquidGlassPopoverMenu
 import com.music.musica.ui.components.LocalLiquidGlassEnabled
 import com.music.musica.ui.components.MiniPlayer
 import com.music.musica.ui.components.NavTabItem
 import com.music.musica.ui.components.SongActionsSheet
+import com.music.musica.ui.components.glassContentColor
 import com.music.musica.ui.navigation.AppRoute
 import com.music.musica.ui.onboarding.OnboardingScreen
 import com.music.musica.ui.onboarding.YtMusicLoginWebView
 import com.music.musica.ui.player.AudioOutputSheet
 import com.music.musica.ui.player.LyricsOffsetSheet
 import com.music.musica.ui.player.LyricsProviderSheet
+import com.music.musica.ui.player.LyricsShareLine
+import com.music.musica.ui.player.LyricsShareSheet
 import com.music.musica.ui.player.NowPlayingSheet
 import com.music.musica.ui.player.PlaybackSpeedSheet
 import com.music.musica.ui.player.SleepTimerSheet
 import com.music.musica.ui.player.StatsForNerdsDialog
 import com.music.musica.ui.player.SyncedLyricsPanel
 import kotlin.math.abs
+import com.music.musica.ui.screens.CreatePlaylistDialog
 import com.music.musica.ui.screens.DetailScreen
 import com.music.musica.ui.screens.DownloadsScreen
 import com.music.musica.ui.screens.ExploreScreen
@@ -92,13 +102,28 @@ import com.music.musica.ui.screens.MixesScreen
 import com.music.musica.ui.screens.PlaylistPickerSheet
 import com.music.musica.ui.screens.ReplayScreen
 import com.music.musica.ui.screens.SearchScreen
+import com.music.musica.ui.screens.SettingsModalOverlay
+import com.music.musica.ui.screens.SettingsModalRequest
 import com.music.musica.ui.screens.SettingsScreen
+import com.music.musica.ui.screens.TrackSortOrder
+import androidx.compose.material3.Text
 import com.music.musica.ui.theme.DarkStatusBarEffect
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private data class DetailSortMenuRequest(
+    val current: TrackSortOrder,
+    val onSelect: (TrackSortOrder) -> Unit,
+)
+
+private data class LyricsShareRequest(
+    val song: Song,
+    val pickedLines: List<LyricsShareLine>,
+    val backdropBitmap: Bitmap?,
+)
 
 @Composable
 internal fun MusicaAppRoot(
@@ -146,6 +171,11 @@ internal fun MusicaAppRoot(
     var showLyricsOffsetSheet by remember { mutableStateOf(false) }
     var showLyricsProviderSheet by remember { mutableStateOf(false) }
     var showAudioOutputSheet by remember { mutableStateOf(false) }
+    var settingsModal by remember { mutableStateOf<SettingsModalRequest?>(null) }
+    var showCreatePlaylistDialog by remember { mutableStateOf(false) }
+    var showClearHistoryConfirm by remember { mutableStateOf(false) }
+    var detailSortMenu by remember { mutableStateOf<DetailSortMenuRequest?>(null) }
+    var lyricsShareRequest by remember { mutableStateOf<LyricsShareRequest?>(null) }
     var audioOutputRefreshKey by remember { mutableIntStateOf(0) }
 
     val btPermissionLauncher = rememberLauncherForActivityResult(
@@ -380,6 +410,7 @@ internal fun MusicaAppRoot(
                     onExportBackup = { exportBackupLauncher.launch("musica-backup.json") },
                     onImportBackup = { importBackupLauncher.launch(arrayOf("application/json", "text/plain")) },
                     onApplyLanguage = onApplyLanguage,
+                    onOpenModal = { settingsModal = it },
                 )
 
                 visibleRoute == AppRoute.History -> HistoryOverlayHost(
@@ -391,6 +422,7 @@ internal fun MusicaAppRoot(
                     bottomPadding = chromeBottomPadding,
                     onBack = { navigator.pop() },
                     onSongMore = onOpenSongMore,
+                    onRequestClearConfirm = { showClearHistoryConfirm = true },
                 )
 
                 visibleRoute == AppRoute.Replay -> ReplayOverlayHost(
@@ -442,7 +474,12 @@ internal fun MusicaAppRoot(
                             vm.downloadAll(songs, collectionId, collectionTitle)
                             Toast.makeText(context, resources.getString(R.string.toast_download_started), Toast.LENGTH_SHORT).show()
                         },
-                        onToggleSubscribeArtist = vm::toggleArtistSubscribed,
+                        onToggleSubscribeArtist = { artistId, name, thumb ->
+                            val wasSub = artistId in subscribedArtistIds
+                            vm.toggleArtistSubscribed(artistId, name, thumb)
+                            val msg = if (wasSub) R.string.toast_unsubscribed else R.string.toast_subscribed
+                            Toast.makeText(context, resources.getString(msg), Toast.LENGTH_SHORT).show()
+                        },
                         onToggleSaveCollection = { id, type, title, subtitle, thumb ->
                             val wasSaved = id in savedCollectionIds
                             vm.toggleSaveCollection(id, type, title, subtitle, thumb)
@@ -456,6 +493,9 @@ internal fun MusicaAppRoot(
                         onSongMore = onOpenSongMore,
                         onPlayNext = onPlayNextWithToast,
                         onAddToQueue = onAddToQueueWithToast,
+                        onRequestOpenSortMenu = { current, onSelect ->
+                            detailSortMenu = DetailSortMenuRequest(current, onSelect)
+                        },
                     )
                 }
 
@@ -522,6 +562,7 @@ internal fun MusicaAppRoot(
                         onOpenDownloads = { navigator.push(AppRoute.Downloads) },
                         onOpenHistory = { navigator.push(AppRoute.History) },
                         onOpenLogin = { navigator.push(AppRoute.YtLogin) },
+                        onRequestCreatePlaylist = { showCreatePlaylistDialog = true },
                         onBrowseLongClick = onOpenBrowseMore,
                         onPlaylistLongClick = { pl ->
                             browseActionTarget = BrowseActionTarget.fromUserPlaylist(pl)
@@ -556,7 +597,12 @@ internal fun MusicaAppRoot(
             showStatsDialog ||
             showLyricsOffsetSheet ||
             showLyricsProviderSheet ||
-            showAudioOutputSheet
+            showAudioOutputSheet ||
+            settingsModal != null ||
+            showCreatePlaylistDialog ||
+            showClearHistoryConfirm ||
+            detailSortMenu != null ||
+            lyricsShareRequest != null
         val activeOverlayHazeState = if (nowPlayingExpanded && playerState.currentSong != null) {
             playerHazeState
         } else {
@@ -569,6 +615,7 @@ internal fun MusicaAppRoot(
             val bottomGlassActive = settings.frostedGlassEnabled && !nowPlayingExpanded && !hasModalOverlay
             BottomFadeScrim(
                 hasMiniPlayer = hasMiniPlayer,
+                scrimColor = if (visibleRoute == AppRoute.Replay) Color.Black else MaterialTheme.colorScheme.background,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
             FloatingBarsTapGuard(
@@ -637,6 +684,9 @@ internal fun MusicaAppRoot(
                 onOpenMoreActions = onOpenPlayerSongMore,
                 onOpenLyricsProviders = { showLyricsProviderSheet = true },
                 onOpenLyricsOffset = { showLyricsOffsetSheet = true },
+                onOpenLyricsShare = { song, lines, bmp ->
+                    lyricsShareRequest = LyricsShareRequest(song, lines, bmp)
+                },
                 onOpenAudioOutput = {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
                         AudioOutputRouter.needsBluetoothConnectPermission(context)
@@ -656,12 +706,12 @@ internal fun MusicaAppRoot(
             val lyricsStateForBadge by vm.lyricsState.collectAsStateWithLifecycle()
             val lyricsOffsetMs = (lyricsStateForBadge as? UiState.Success)?.data?.offsetMs ?: 0L
             val sleepBadge = when {
-                playerState.sleepAfterTrack -> stringResource(R.string.player_sleep_end_of_track)
+                playerState.sleepAfterTrack -> stringResource(R.string.player_sleep_end_of_track_short)
                 (playerState.sleepTimerRemainingMs ?: 0L) > 0L -> formatDuration(playerState.sleepTimerRemainingMs ?: 0L)
                 else -> null
             }
             val speedBadge = if (abs(playerState.playbackSpeed - 1.0f) > 0.01f) {
-                "${"%.2f".format(playerState.playbackSpeed).trimEnd('0').trimEnd('.')}×"
+                "${"%.2f".format(playerState.playbackSpeed).trimEnd('0').trimEnd('.', ',')}×"
             } else null
             val offsetBadge = if (lyricsOffsetMs != 0L) {
                 val sign = if (lyricsOffsetMs > 0L) "+" else ""
@@ -740,7 +790,10 @@ internal fun MusicaAppRoot(
                 },
                 onToggleSaveOrSubscribe = {
                     if (target.type == BrowseType.ARTIST) {
+                        val wasSub = target.browseId in subscribedArtistIds
                         vm.toggleArtistSubscribed(target.browseId, target.title, target.thumbnailUrl)
+                        val msg = if (wasSub) R.string.toast_unsubscribed else R.string.toast_subscribed
+                        Toast.makeText(context, resources.getString(msg), Toast.LENGTH_SHORT).show()
                     } else {
                         val wasSaved = target.browseId in savedCollectionIds
                         vm.toggleSaveCollection(
@@ -894,6 +947,7 @@ internal fun MusicaAppRoot(
             AudioOutputSheet(
                 devices = audioOutputSnapshot.devices,
                 activeDeviceId = audioOutputSnapshot.activeDevice?.id,
+                hasPreferredOverride = playerState.preferredAudioDeviceId != null,
                 needsBluetoothPermission = AudioOutputRouter.needsBluetoothConnectPermission(context),
                 hazeState = activeOverlayHazeState,
                 onSelectDevice = vm::setPreferredAudioDevice,
@@ -904,6 +958,102 @@ internal fun MusicaAppRoot(
                 },
                 onDismiss = { showAudioOutputSheet = false },
             )
+        }
+
+        lyricsShareRequest?.let { req ->
+            LyricsShareSheet(
+                song = req.song,
+                pickedLines = req.pickedLines,
+                backdropBitmap = req.backdropBitmap,
+                showLogo = settings.showLyricsCardLogo,
+                hazeState = activeOverlayHazeState,
+                onToggleShowLogo = vm::setShowLyricsCardLogo,
+                onDismiss = { lyricsShareRequest = null },
+            )
+        }
+
+        settingsModal?.let { modal ->
+            SettingsModalOverlay(
+                request = modal,
+                settings = settings,
+                hazeState = activeOverlayHazeState,
+                onSignOut = vm::signOut,
+                onSetWifiQuality = vm::setWifiQuality,
+                onSetCellularQuality = vm::setCellularQuality,
+                onSetTranslationLanguage = vm::setTranslationLanguage,
+                onDismiss = { settingsModal = null },
+            )
+        }
+
+        if (showCreatePlaylistDialog) {
+            CreatePlaylistDialog(
+                hazeState = activeOverlayHazeState,
+                onCreate = { name ->
+                    showCreatePlaylistDialog = false
+                    vm.createPlaylist(name)
+                },
+                onDismiss = { showCreatePlaylistDialog = false },
+            )
+        }
+
+        if (showClearHistoryConfirm) {
+            LiquidGlassDialog(
+                hazeState = activeOverlayHazeState,
+                onDismiss = { showClearHistoryConfirm = false },
+                title = stringResource(R.string.history_title),
+                actions = {
+                    GlassDialogButton(
+                        text = stringResource(R.string.action_cancel),
+                        onClick = { showClearHistoryConfirm = false },
+                    )
+                    GlassDialogButton(
+                        text = stringResource(R.string.action_clear),
+                        destructive = true,
+                        onClick = {
+                            showClearHistoryConfirm = false
+                            vm.clearHistory()
+                        },
+                    )
+                },
+            ) {
+                Text(
+                    text = stringResource(R.string.history_clear_confirm),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = glassContentColor().copy(alpha = 0.80f),
+                )
+            }
+        }
+
+        detailSortMenu?.let { menu ->
+            LiquidGlassPopoverMenu(
+                hazeState = activeOverlayHazeState,
+                onDismiss = { detailSortMenu = null },
+            ) {
+                LiquidGlassMenuRow(
+                    label = stringResource(R.string.detail_sort_default),
+                    selected = menu.current == TrackSortOrder.DEFAULT,
+                    onClick = {
+                        menu.onSelect(TrackSortOrder.DEFAULT)
+                        detailSortMenu = null
+                    },
+                )
+                LiquidGlassMenuRow(
+                    label = stringResource(R.string.detail_sort_title_asc),
+                    selected = menu.current == TrackSortOrder.TITLE_ASC,
+                    onClick = {
+                        menu.onSelect(TrackSortOrder.TITLE_ASC)
+                        detailSortMenu = null
+                    },
+                )
+                LiquidGlassMenuRow(
+                    label = stringResource(R.string.detail_sort_title_desc),
+                    selected = menu.current == TrackSortOrder.TITLE_DESC,
+                    onClick = {
+                        menu.onSelect(TrackSortOrder.TITLE_DESC)
+                        detailSortMenu = null
+                    },
+                )
+            }
         }
     }
     }
@@ -960,8 +1110,8 @@ private fun HomeTabHost(
         listState = listState,
         onRefresh = { vm.loadHome(isRefresh = true) },
         onLoadMore = vm::loadMoreHome,
-        onTopPickClick = { pick, _ ->
-            vm.openTopPick(pick) {
+        onTopPickClick = { pick, captionTitle ->
+            vm.openTopPick(pick, captionTitle) {
                 Toast.makeText(context, resources.getString(R.string.top_pick_load_failed), Toast.LENGTH_SHORT).show()
             }
         },
@@ -1055,6 +1205,7 @@ private fun LibraryTabHost(
     onOpenDownloads: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenLogin: () -> Unit,
+    onRequestCreatePlaylist: () -> Unit,
     onBrowseLongClick: (ShelfItem) -> Unit,
     onPlaylistLongClick: (com.music.musica.core.model.UserPlaylist) -> Unit,
     onSongMore: (Song) -> Unit,
@@ -1094,8 +1245,10 @@ private fun LibraryTabHost(
         onPlayLiked = { idx ->
             vm.playTracks(likedSongs, idx, shuffled = false, sourceLabel = likedSongsLabel)
         },
+        onOpenLikedSongs = { vm.openLikedSongs(likedSongsLabel) },
         onOpenPlaylist = vm::openLocalPlaylist,
         onCreatePlaylist = vm::createPlaylist,
+        onRequestCreatePlaylist = onRequestCreatePlaylist,
         onTogglePinPlaylist = vm::togglePlaylistPin,
         onPlaylistLongClick = onPlaylistLongClick,
         onOpenDownloads = onOpenDownloads,
@@ -1175,6 +1328,7 @@ private fun SettingsOverlayHost(
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     onApplyLanguage: (AppLanguage) -> Unit,
+    onOpenModal: (SettingsModalRequest) -> Unit,
 ) {
     val context = LocalContext.current
     val resources = LocalResources.current
@@ -1231,6 +1385,7 @@ private fun SettingsOverlayHost(
             vm.setAppLanguage(lang)
             onApplyLanguage(lang)
         },
+        onOpenModal = onOpenModal,
     )
 }
 
@@ -1244,6 +1399,7 @@ private fun HistoryOverlayHost(
     bottomPadding: Dp,
     onBack: () -> Unit,
     onSongMore: (Song) -> Unit,
+    onRequestClearConfirm: () -> Unit,
 ) {
     val recentHistory by vm.recentHistory.collectAsStateWithLifecycle()
     val historyLabel = stringResource(R.string.library_history)
@@ -1258,6 +1414,7 @@ private fun HistoryOverlayHost(
         onClearHistory = vm::clearHistory,
         onPlaySong = { vm.container.playerController.playSong(it, sourceLabel = historyLabel) },
         onSongMore = onSongMore,
+        onRequestClearConfirm = onRequestClearConfirm,
     )
 }
 
@@ -1333,6 +1490,7 @@ private fun NowPlayingOverlayHost(
     onOpenMoreActions: (Song) -> Unit,
     onOpenLyricsProviders: () -> Unit,
     onOpenLyricsOffset: () -> Unit,
+    onOpenLyricsShare: (Song, List<LyricsShareLine>, Bitmap?) -> Unit,
     onOpenAudioOutput: () -> Unit,
     onOpenStatsForNerds: () -> Unit,
 ) {
@@ -1385,6 +1543,7 @@ private fun NowPlayingOverlayHost(
                 captureBackdropBitmap = captureBackdrop,
                 onRequestOpenProviderSheet = onOpenLyricsProviders,
                 onRequestOpenOffsetSheet = onOpenLyricsOffset,
+                onRequestOpenShareSheet = onOpenLyricsShare,
                 onSeekTo = { vm.container.playerController.seekTo(it) },
                 onChangeOffset = vm::updateLyricsOffset,
                 onSelectProvider = { src ->

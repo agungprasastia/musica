@@ -1,11 +1,13 @@
 package com.music.musica.ui.player
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -24,6 +26,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.music.musica.R
 import com.music.musica.core.model.NerdStats
@@ -49,7 +52,8 @@ fun PlaybackSpeedSheet(
     onDismiss: () -> Unit,
 ) {
     val presets = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
-    val selectedPresetIdx = presets.indexOfFirst { abs(it - currentSpeed) < 0.03f }
+    val presetLabels = listOf("0.5×", "0.75×", "1×", "1.25×", "1.5×", "2×")
+    val selectedPresetIdx = presets.indexOfFirst { abs(it - currentSpeed) < 0.02f }
     val fg = glassContentColor()
 
     LiquidGlassSheet(
@@ -70,11 +74,16 @@ fun PlaybackSpeedSheet(
                     text = stringResource(R.string.player_speed_title),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = fg,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
+                Spacer(Modifier.width(10.dp))
                 Text(
                     text = "%.2f×".format(currentSpeed),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
                 )
             }
             Spacer(Modifier.height(16.dp))
@@ -90,8 +99,8 @@ fun PlaybackSpeedSheet(
             )
             Spacer(Modifier.height(16.dp))
             PillSegmentedControl(
-                options = presets.map { "%.2g×".format(it) },
-                selectedIndex = selectedPresetIdx.coerceAtLeast(0),
+                options = presetLabels,
+                selectedIndex = selectedPresetIdx,
                 onSelect = { idx -> onSpeedChange(presets[idx]) },
             )
             Spacer(Modifier.height(14.dp))
@@ -137,12 +146,18 @@ fun SleepTimerSheet(
                     text = stringResource(R.string.player_sleep_timer),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = fg,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
                 if (remainingMs > 0L) {
+                    Spacer(Modifier.width(10.dp))
                     Text(
                         text = stringResource(R.string.player_sleep_remaining, formatDuration(remainingMs)),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
@@ -159,7 +174,11 @@ fun SleepTimerSheet(
                         text = pluralStringResource(R.plurals.player_sleep_minutes, roundedMin, roundedMin),
                         style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                         color = fg,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
                     )
+                    Spacer(Modifier.width(10.dp))
                     GlassDialogButton(
                         text = stringResource(R.string.action_save),
                         primary = true,
@@ -189,7 +208,8 @@ fun SleepTimerSheet(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                    .clickable { onToggleFadeOut(!fadeOutEnabled) }
+                    .padding(horizontal = 20.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -197,7 +217,11 @@ fun SleepTimerSheet(
                     text = stringResource(R.string.player_sleep_fade_out),
                     style = MaterialTheme.typography.bodyLarge,
                     color = fg,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
+                Spacer(Modifier.width(12.dp))
                 IosSwitch(checked = fadeOutEnabled, onCheckedChange = onToggleFadeOut)
             }
 
@@ -256,7 +280,13 @@ fun StatsForNerdsDialog(
             )
         },
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 420.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             StatLine(stringResource(R.string.stats_video_id), stats.videoId.ifBlank { "—" })
             StatLine(
                 stringResource(R.string.stats_codec),

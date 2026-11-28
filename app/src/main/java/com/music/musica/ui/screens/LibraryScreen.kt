@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -114,8 +115,10 @@ fun LibraryScreen(
     listState: LazyListState = rememberLazyListState(),
     onRefresh: () -> Unit,
     onPlayLiked: (Int) -> Unit,
+    onOpenLikedSongs: () -> Unit = { if (likedSongs.isNotEmpty()) onPlayLiked(0) },
     onOpenPlaylist: (UserPlaylist) -> Unit,
     onCreatePlaylist: (String) -> Unit,
+    onRequestCreatePlaylist: (() -> Unit)? = null,
     onTogglePinPlaylist: (String) -> Unit = {},
     onPlaylistLongClick: ((UserPlaylist) -> Unit)? = null,
     onOpenDownloads: () -> Unit,
@@ -131,6 +134,9 @@ fun LibraryScreen(
     var showCreateDialog by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     val screenHazeState = rememberHazeState()
+    fun openCreatePlaylist() {
+        if (onRequestCreatePlaylist != null) onRequestCreatePlaylist() else showCreateDialog = true
+    }
 
     val orderedPlaylists = remember(playlists) {
         playlists.sortedByDescending { it.isPinned }
@@ -176,7 +182,7 @@ fun LibraryScreen(
                             contentDescription = stringResource(R.string.library_new_playlist),
                             hazeState = hazeState,
                             frostedGlassEnabled = frostedGlassEnabled,
-                            onClick = { showCreateDialog = true },
+                            onClick = { openCreatePlaylist() },
                         )
                     }
                 }
@@ -228,7 +234,7 @@ fun LibraryScreen(
                             iconTint = MusicaAccentRed,
                             title = stringResource(R.string.library_liked_songs),
                             trailing = pluralStringResource(R.plurals.library_songs_count, likedSongs.size, likedSongs.size),
-                            onClick = { if (likedSongs.isNotEmpty()) onPlayLiked(0) },
+                            onClick = onOpenLikedSongs,
                         )
                     }
                 }
@@ -237,8 +243,8 @@ fun LibraryScreen(
                     item(key = "lib_signin_banner") {
                         Spacer(Modifier.height(16.dp))
                         AnimatedSignInBanner(
-                            title = stringResource(R.string.onboarding_connect_title),
-                            subtitle = stringResource(R.string.onboarding_connect_subtitle),
+                            title = stringResource(R.string.library_connect_title),
+                            subtitle = stringResource(R.string.library_connect_subtitle),
                             onSignIn = onOpenLogin,
                             reduceAnimation = reduceAnimation,
                         )
@@ -265,7 +271,7 @@ fun LibraryScreen(
                                 modifier = Modifier
                                     .width(136.dp)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .clickable { showCreateDialog = true },
+                                    .clickable { openCreatePlaylist() },
                             ) {
                                 Box(
                                     modifier = Modifier
@@ -367,12 +373,34 @@ fun LibraryScreen(
                 // Liked Songs Preview List
                 if (likedSongs.isNotEmpty()) {
                     item(key = "liked_header") {
-                        Text(
-                            text = stringResource(R.string.library_liked_songs),
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = MaterialTheme.colorScheme.onBackground,
-                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 22.dp, bottom = 6.dp),
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 16.dp, end = 16.dp, top = 22.dp, bottom = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = stringResource(R.string.library_liked_songs),
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = MaterialTheme.colorScheme.onBackground,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (likedSongs.size > 25) {
+                                Spacer(Modifier.width(10.dp))
+                                Text(
+                                    text = stringResource(R.string.library_see_all),
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable(onClick = onOpenLikedSongs)
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                )
+                            }
+                        }
                     }
                     itemsIndexed(likedSongs.take(25), key = { idx, s -> "liked_${idx}_${s.videoId}" }) { idx, song ->
                         SongRow(
@@ -421,9 +449,9 @@ private fun LibraryLinkRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(54.dp)
+            .heightIn(min = 54.dp)
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
@@ -437,13 +465,18 @@ private fun LibraryLinkRow(
             text = title,
             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
             color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         if (trailing.isNotBlank()) {
+            Spacer(Modifier.width(12.dp))
             Text(
                 text = trailing,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.width(4.dp))
         }
@@ -561,8 +594,14 @@ fun PlaylistPickerSheet(
                 ) {
                     Icon(Icons.AutoMirrored.Rounded.QueueMusic, contentDescription = null, tint = fg.copy(alpha = 0.72f))
                     Spacer(Modifier.width(14.dp))
-                    Column {
-                        Text(playlist.title, style = MaterialTheme.typography.titleMedium, color = fg)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = playlist.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = fg,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                         val countText = pluralStringResource(R.plurals.library_songs_count, playlist.songCount, playlist.songCount)
                         val meta = if (playlist.isRemoteYtm) {
                             "${stringResource(R.string.library_ytm_playlist_badge)} · $countText"
@@ -573,6 +612,8 @@ fun PlaylistPickerSheet(
                             text = meta,
                             style = MaterialTheme.typography.bodySmall,
                             color = fg.copy(alpha = 0.65f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }

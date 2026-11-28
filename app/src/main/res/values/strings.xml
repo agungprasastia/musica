@@ -399,6 +399,14 @@
     <string name="player_lyrics_instrumental">Instrumental</string>
     <string name="player_lyrics_none_found">No lyrics found</string>
     <string name="menu_lyrics_offset">Lyrics Offset</string>
+    <string name="player_sleep_end_of_track_short">Track end</string>
+    <string name="library_connect_title">Connect YouTube Music</string>
+    <string name="library_connect_subtitle">Sign in to sync your liked songs, playlists, and saved albums.</string>
+    <string name="library_see_all">See all</string>
+    <string name="detail_filter_empty">No tracks match “%1$s”</string>
+    <string name="toast_subscribed">Subscribed to artist</string>
+    <string name="toast_unsubscribed">Unsubscribed from artist</string>
+    <string name="a11y_move_up">Move up</string>
 
     <string-array name="lyrics_loading_lines">
         <item>Checking the archives</item>

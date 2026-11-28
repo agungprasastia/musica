@@ -106,12 +106,13 @@ fun glassContentColor(): Color =
     if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) Color.Black else Color.White
 
 /**
- * Active tab / segment capsule fill on Liquid Glass: softly raised white lift in both dark and light themes.
+ * Active tab / segment capsule fill on Liquid Glass: softly raised white lift in dark mode
+ * and crisp subtle graphite contrast in light mode so active tabs stay unmistakable.
  */
 @Composable
 fun glassIndicatorColor(): Color =
     if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) {
-        Color.White.copy(alpha = 0.56f)
+        Color.Black.copy(alpha = 0.09f)
     } else {
         Color.White.copy(alpha = 0.16f)
     }
@@ -367,6 +368,7 @@ fun LiquidGlassSheet(
             modifier = modifier
                 .fillMaxWidth()
                 .widthIn(max = 520.dp)
+                .statusBarsPadding()
                 .navigationBarsPadding()
                 .imePadding()
                 .padding(horizontal = 12.dp, vertical = 12.dp)
@@ -383,6 +385,7 @@ fun LiquidGlassSheet(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(min = 34.dp)
                     .pointerInput(Unit) {
                         try {
                             detectVerticalDragGestures(
@@ -410,7 +413,7 @@ fun LiquidGlassSheet(
                             scope.launch { dragOffsetY.snapTo(0f) }
                         }
                     }
-                    .padding(top = 10.dp, bottom = 6.dp),
+                    .padding(top = 10.dp, bottom = 8.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Box(
@@ -510,14 +513,16 @@ fun GlassDialogButton(
     primary: Boolean = false,
     destructive: Boolean = false,
 ) {
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val shape = RoundedCornerShape(percent = 50)
+    val destructiveTextColor = if (isDark) Color(0xFFFF453A) else Color(0xFFD70015)
     val containerColor = when {
-        destructive -> Color(0xFFFF3B30).copy(alpha = if (enabled) 0.20f else 0.08f)
+        destructive -> Color(0xFFFF3B30).copy(alpha = if (enabled) (if (isDark) 0.20f else 0.14f) else 0.08f)
         primary -> MaterialTheme.colorScheme.primary.copy(alpha = if (enabled) 0.92f else 0.35f)
         else -> Color.Transparent
     }
     val textColor = when {
-        destructive -> Color(0xFFFF453A)
+        destructive -> destructiveTextColor
         primary -> MaterialTheme.colorScheme.onPrimary
         else -> glassContentColor().copy(alpha = if (enabled) 0.88f else 0.40f)
     }
@@ -532,11 +537,15 @@ fun GlassDialogButton(
                     Modifier
                         .clip(shape)
                         .background(containerColor)
-                        .border(0.75.dp, Color.White.copy(alpha = 0.20f), shape)
+                        .border(
+                            0.75.dp,
+                            if (destructive && !isDark) destructiveTextColor.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.20f),
+                            shape,
+                        )
                 },
             )
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 18.dp),
+            .padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -544,6 +553,7 @@ fun GlassDialogButton(
             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
             color = textColor,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -610,9 +620,10 @@ fun LiquidGlassMenuRow(
     destructive: Boolean = false,
     onClick: () -> Unit,
 ) {
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val fg = glassContentColor()
     val tint = when {
-        destructive -> Color(0xFFFF453A)
+        destructive -> if (isDark) Color(0xFFFF453A) else Color(0xFFD70015)
         selected -> MaterialTheme.colorScheme.primary
         else -> fg
     }
@@ -664,8 +675,8 @@ fun LiquidGlassMenuRow(
 fun BottomFadeScrim(
     hasMiniPlayer: Boolean,
     modifier: Modifier = Modifier,
+    scrimColor: Color = MaterialTheme.colorScheme.background,
 ) {
-    val bg = MaterialTheme.colorScheme.background
     val inset = floatingBarInsets.asPaddingValues().calculateBottomPadding()
     val runHeight = if (hasMiniPlayer) 146.dp else 104.dp
     val targetHeight by animateDpAsState(
@@ -673,11 +684,11 @@ fun BottomFadeScrim(
         animationSpec = tween(durationMillis = 220),
         label = "bottom_fade_height",
     )
-    val brush = remember(bg) {
+    val brush = remember(scrimColor) {
         Brush.verticalGradient(
             colorStops = Array(SCRIM_STOPS) { i ->
                 val t = i / (SCRIM_STOPS - 1f)
-                t to bg.copy(alpha = EaseInCubic.transform(t) * 0.88f)
+                t to scrimColor.copy(alpha = EaseInCubic.transform(t) * 0.88f)
             },
         )
     }
@@ -723,13 +734,13 @@ fun TopFadeBlur(
     @Suppress("UNUSED_PARAMETER") hazeState: HazeState,
     @Suppress("UNUSED_PARAMETER") frostedGlassEnabled: Boolean,
     modifier: Modifier = Modifier,
-    extraHeight: Dp = 18.dp,
+    extraHeight: Dp = 22.dp,
 ) {
     val bg = MaterialTheme.colorScheme.background
     val gradient = remember(bg) {
         Brush.verticalGradient(
-            0.00f to bg.copy(alpha = 0.88f),
-            0.55f to bg.copy(alpha = 0.36f),
+            0.00f to bg.copy(alpha = 0.94f),
+            0.55f to bg.copy(alpha = 0.42f),
             1.00f to Color.Transparent,
         )
     }
@@ -745,7 +756,7 @@ fun TopFadeBlur(
             modifier = Modifier
                 .fillMaxWidth()
                 .windowInsetsTopHeight(WindowInsets.statusBars)
-                .background(bg.copy(alpha = 0.88f)),
+                .background(bg.copy(alpha = 0.96f)),
         )
     }
 }

@@ -258,6 +258,12 @@ fun FloatingGlassNavBar(
             val rimAlpha = maxOf(liftProgress, travelLag * 0.85f)
 
             // Sliding elastic active capsule
+            val restingRim = if (isDark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.08f)
+            val capsuleRimColor = if (rimAlpha > 0.05f) {
+                liftedRimColor.copy(alpha = (liftedRimColor.alpha * rimAlpha).coerceAtLeast(restingRim.alpha))
+            } else {
+                restingRim
+            }
             Box(
                 modifier = Modifier
                     .offset { IntOffset((animatedIndex * tabWidthPx).roundToInt(), 0) }
@@ -269,16 +275,10 @@ fun FloatingGlassNavBar(
                     }
                     .clip(pillShape)
                     .background(capsuleColor)
-                    .then(
-                        if (rimAlpha > 0.05f) {
-                            Modifier.border(
-                                width = 0.8.dp,
-                                color = liftedRimColor.copy(alpha = liftedRimColor.alpha * rimAlpha),
-                                shape = pillShape,
-                            )
-                        } else {
-                            Modifier
-                        },
+                    .border(
+                        width = if (rimAlpha > 0.05f) 0.8.dp else 0.6.dp,
+                        color = capsuleRimColor,
+                        shape = pillShape,
                     ),
             )
 
