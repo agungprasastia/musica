@@ -54,7 +54,7 @@ private data class CachedTranslationPayload(
     val detectedSourceLang: String? = null,
 ) {
     companion object {
-        const val CACHE_VERSION = 1
+        const val CACHE_VERSION = 2
     }
 }
 
@@ -384,16 +384,57 @@ class LyricsTranslationEngine(
 
     internal fun splitDelimitedSlots(raw: String, fallbackBatch: List<String>): List<String> {
         val matches = DELIMITER_REGEX.findAll(raw).toList()
-        if (matches.size == fallbackBatch.size) {
-            return matches.indices.map { i ->
-                val start = matches[i].range.last + 1
+        if (matches.isNotEmpty()) {
+            val indexed = arrayOfNulls<String>(fallbackBatch.size)
+            var matchedIndexedCount = 0
+            for (i in matches.indices) {
+                val m = matches[i]
+                val num = (m.groupValues.getOrNull(1)?.takeIf { it.isNotEmpty() }
+                    ?: m.groupValues.getOrNull(2)?.takeIf { it.isNotEmpty() })?.toIntOrNull()
+                val start = m.range.last + 1
                 val end = matches.getOrNull(i + 1)?.range?.first ?: raw.length
-                raw.substring(start, end).trim().ifBlank { fallbackBatch[i] }
+                val cleaned = sanitizeTranslatedSlot(raw.substring(start, end))
+                if (num != null && num in fallbackBatch.indices && indexed[num] == null) {
+                    indexed[num] = cleaned
+                    matchedIndexedCount++
+                }
+            }
+            if (matchedIndexedCount == fallbackBatch.size) {
+                return fallbackBatch.indices.map { i -> indexed[i]?.ifBlank { fallbackBatch[i] } ?: fallbackBatch[i] }
+            }
+            if (matches.size == fallbackBatch.size) {
+                return matches.indices.map { i ->
+                    val start = matches[i].range.last + 1
+                    val end = matches.getOrNull(i + 1)?.range?.first ?: raw.length
+                    sanitizeTranslatedSlot(raw.substring(start, end)).ifBlank { fallbackBatch[i] }
+                }
+            }
+            if (matchedIndexedCount >= (fallbackBatch.size + 1) / 2) {
+                val lineFallback = raw.lineSequence()
+                    .map { sanitizeTranslatedSlot(it) }
+                    .filter { it.isNotEmpty() }
+                    .toList()
+                return fallbackBatch.indices.map { i ->
+                    indexed[i]?.takeIf { it.isNotBlank() }
+                        ?: lineFallback.getOrNull(i)?.takeIf { it.isNotBlank() }
+                        ?: fallbackBatch[i]
+                }
             }
         }
-        val byLines = raw.lineSequence().map { DELIMITER_REGEX.replace(it, "").trim() }.filter { it.isNotEmpty() }.toList()
+        val byLines = raw.lineSequence()
+            .map { sanitizeTranslatedSlot(it) }
+            .filter { it.isNotEmpty() }
+            .toList()
         if (byLines.size == fallbackBatch.size) return byLines
         return fallbackBatch.indices.map { i -> byLines.getOrNull(i) ?: fallbackBatch[i] }
+    }
+
+    private fun sanitizeTranslatedSlot(text: String): String {
+        val stripped = DELIMITER_REGEX.replace(text, "")
+        return LEADING_ORPHAN_MARKER_REGEX.replace(stripped, "")
+            .replace(MARKER_OPEN.toString(), "")
+            .replace(MARKER_CLOSE.toString(), "")
+            .trim()
     }
 
     private fun unwrapSectionHeader(text: String): String =
@@ -474,7 +515,9 @@ class LyricsTranslationEngine(
         private const val ROMANIZED_REPAIR_THRESHOLD = 0.33f
         private const val MARKER_OPEN = '\uE000'
         private const val MARKER_CLOSE = '\uE001'
-        private val DELIMITER_REGEX = Regex("""\uE000[^\uE000\uE001]*[\uE000\uE001]""")
+        // Tolerates Google Translate dropping either the opening \uE000 or closing \uE001 around the 4-digit slot index
+        private val DELIMITER_REGEX = Regex("""(?:\uE000\s*)?(\d{4})\s*\uE001|\uE000\s*(\d{4})(?:\s*\uE001)?""")
+        private val LEADING_ORPHAN_MARKER_REGEX = Regex("""^\s*[\uE000\uE001]+\s*""")
         private const val USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36"
 

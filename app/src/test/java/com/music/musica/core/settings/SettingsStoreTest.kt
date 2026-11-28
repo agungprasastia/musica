@@ -45,6 +45,7 @@ class SettingsStoreTest {
         assertEquals(UserSettings(), defaults)
         assertFalse(defaults.onboardingCompleted)
         assertEquals(ThemeMode.SYSTEM, defaults.themeMode)
+        assertTrue(defaults.fullBleedCoverArt)
         assertEquals(512, defaults.audioCacheLimitMb)
         assertEquals(1.0f, defaults.playbackSpeed, 0.001f)
         assertTrue(defaults.sleepTimerFadeOut)
@@ -59,7 +60,7 @@ class SettingsStoreTest {
         store.setOnboardingCompleted(true)
         store.setThemeMode(ThemeMode.DARK)
         store.setPlayerTheme(PlayerTheme.LEGACY)
-        store.setFullBleedCoverArt(true)
+        store.setFullBleedCoverArt(false)
         store.setSleepTimerFadeOut(false)
         store.setAudioCacheLimitMb(99_999) // clamped to 4096
         store.setCrossfadeSeconds(42)      // clamped to 12
@@ -72,7 +73,7 @@ class SettingsStoreTest {
         assertTrue(updated.onboardingCompleted)
         assertEquals(ThemeMode.DARK, updated.themeMode)
         assertEquals(PlayerTheme.LEGACY, updated.playerTheme)
-        assertTrue(updated.fullBleedCoverArt)
+        assertFalse(updated.fullBleedCoverArt)
         assertFalse(updated.sleepTimerFadeOut)
         assertEquals(4096, updated.audioCacheLimitMb)
         assertEquals(12, updated.crossfadeSeconds)

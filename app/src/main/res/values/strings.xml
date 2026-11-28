@@ -382,4 +382,51 @@
     <string name="settings_translation_language">Translation Language</string>
     <string name="settings_translation_auto">Automatic (App language)</string>
     <string name="settings_translation_search_hint">Search languages…</string>
+
+    <!-- Full-Bleed Now Playing, Live Strip & Audio Output -->
+    <string name="player_playing_from">Playing from %1$s</string>
+    <string name="player_source_queue">Queue</string>
+    <string name="player_audio_output">Audio Output</string>
+    <string name="player_this_phone">This phone</string>
+    <string name="player_audio_output_active">Playing</string>
+    <string name="player_audio_output_auto">System default</string>
+    <string name="player_audio_output_bt_hint">Allow Bluetooth access to see connected headphones and speakers by name.</string>
+    <string name="player_audio_output_allow_bt">Allow Bluetooth</string>
+    <string name="player_repeat">Repeat</string>
+    <string name="player_lyrics_by">Lyrics by %1$s</string>
+    <string name="player_lyrics_not_available">Lyrics not available</string>
+    <string name="player_lyrics_open">Open lyrics</string>
+    <string name="player_lyrics_instrumental">Instrumental</string>
+    <string name="player_lyrics_none_found">No lyrics found</string>
+    <string name="menu_lyrics_offset">Lyrics Offset</string>
+
+    <string-array name="lyrics_loading_lines">
+        <item>Checking the archives</item>
+        <item>Finding the words</item>
+        <item>Listening closely</item>
+        <item>Flipping through the liner notes</item>
+        <item>Tuning in to the chorus</item>
+        <item>Gathering the verses</item>
+        <item>Reading the sleeve</item>
+        <item>Syncing every syllable</item>
+        <item>Hunting down the hook</item>
+        <item>Warming up the mic</item>
+        <item>Pulling up the sheet</item>
+        <item>Unfolding the lyrics</item>
+    </string-array>
+
+    <string-array name="lyrics_intro_lines">
+        <item>Words coming up</item>
+        <item>Setting the mood</item>
+        <item>Bass first, lyrics next</item>
+        <item>Wait for the drop</item>
+        <item>Letting the intro breathe</item>
+        <item>Vocals entering soon</item>
+        <item>Warming up the melody</item>
+        <item>Right after this intro</item>
+        <item>Feel the rhythm first</item>
+        <item>First verse on deck</item>
+        <item>Instruments taking the lead</item>
+        <item>Stay tuned for the vocals</item>
+    </string-array>
 </resources>

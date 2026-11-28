@@ -84,4 +84,20 @@ class LyricsTranslationEngineTest {
         assertEquals("zh-TW", LyricsTranslationEngine.normalizeLanguageTag("zh-Hant-TW"))
         assertEquals("zh-CN", LyricsTranslationEngine.normalizeLanguageTag("zh-CN"))
     }
+
+    @Test
+    fun splitDelimitedSlots_recoversWhenTranslateDropsOpeningOrClosingPuaMarker() {
+        val engine = LyricsTranslationEngine()
+        val fallback = listOf("One day", "A chemical reaction", "Hysterical and useless")
+        val mangledResponse =
+            "\uE0000000\uE001Suatu hari\n" +
+                "0001\uE001Reaksi kimia\n" +
+                "\uE0000002 Histeris dan tidak berguna"
+
+        val parsed = engine.splitDelimitedSlots(mangledResponse, fallback)
+        assertEquals(
+            listOf("Suatu hari", "Reaksi kimia", "Histeris dan tidak berguna"),
+            parsed,
+        )
+    }
 }

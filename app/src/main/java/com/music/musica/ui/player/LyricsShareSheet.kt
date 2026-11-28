@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Share
@@ -113,7 +115,8 @@ fun LyricsShareSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 10.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
@@ -122,13 +125,13 @@ fun LyricsShareSheet(
                 color = fg,
                 modifier = Modifier.align(Alignment.Start),
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
 
-            // Live card/story preview
+            // Live card/story preview sized to keep action buttons always visible on compact screens
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 240.dp, max = 360.dp),
+                    .heightIn(min = 190.dp, max = 250.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 val bmp = previewBitmap
@@ -139,9 +142,9 @@ fun LyricsShareSheet(
                         contentDescription = song.title,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
-                            .heightIn(max = 350.dp)
+                            .heightIn(max = 244.dp)
                             .aspectRatio(ratio)
-                            .clip(RoundedCornerShape(18.dp))
+                            .clip(RoundedCornerShape(16.dp))
                             .background(Color.Black.copy(alpha = 0.25f)),
                     )
                 } else {
@@ -153,7 +156,7 @@ fun LyricsShareSheet(
                 }
             }
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(12.dp))
 
             PillSegmentedControl(
                 options = listOf(

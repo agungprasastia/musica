@@ -27,7 +27,7 @@ data class UserSettings(
     val onboardingCompleted: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val playerTheme: PlayerTheme = PlayerTheme.DEFAULT,
-    val fullBleedCoverArt: Boolean = false,
+    val fullBleedCoverArt: Boolean = true,
     val showVolumeSlider: Boolean = true,
     val showRemainingTime: Boolean = true,
     val blurUnfocusedLyrics: Boolean = true,
@@ -129,7 +129,7 @@ class SettingsStore internal constructor(
                 ?: ThemeMode.SYSTEM,
             playerTheme = prefs[Keys.PLAYER_THEME]?.let { runCatching { PlayerTheme.valueOf(it) }.getOrNull() }
                 ?: PlayerTheme.DEFAULT,
-            fullBleedCoverArt = prefs[Keys.FULL_BLEED_COVER] ?: false,
+            fullBleedCoverArt = prefs[Keys.FULL_BLEED_COVER] ?: true,
             showVolumeSlider = prefs[Keys.SHOW_VOLUME_SLIDER] ?: true,
             showRemainingTime = prefs[Keys.SHOW_REMAINING_TIME] ?: true,
             blurUnfocusedLyrics = prefs[Keys.BLUR_UNFOCUSED_LYRICS] ?: true,

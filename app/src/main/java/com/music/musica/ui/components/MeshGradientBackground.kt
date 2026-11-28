@@ -8,6 +8,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,12 +30,15 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.createBitmap
@@ -54,16 +59,22 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 private val blurredMeshCache = ConcurrentHashMap<String, ImageBitmap>()
+private val fullBlurBackdropCache = ConcurrentHashMap<String, ImageBitmap>()
+private val topBandLuminanceCache = ConcurrentHashMap<String, Float>()
 
 /**
  * Three selectable Now Playing backdrops:
- * - [PlayerTheme.DEFAULT]: 6x6 artwork color grid CPU-blurred to a 32x32 smooth mesh (zero live GPU blur cost,
- *   faithfully honors dark/neutral covers without fake neon tinting)
- * - [PlayerTheme.LEGACY]: 4-blob radial mesh with smootherstep falloff that gently drifts and settles after 8s
- * - [PlayerTheme.SIMPLE]: Pre-blurred album artwork with atmospheric scrim
+ * - [PlayerTheme.DEFAULT]: Vertically flipped 6x6 artwork color grid aligned with the bottom edge of
+ *   the cover (eliminating any seam in full-bleed mode), with URL-seeded horizontal shift/mirror on
+ *   rows 1..5, gentle 1.12x saturation lift, and 3-pass CPU blur on 32x32. Crossfades (360ms) to a
+ *   128px CPU-blurred cover with 3-stop scrim when [dimMore] is true (Lyrics / Queue subviews).
+ * - [PlayerTheme.LEGACY]: 4-blob radial mesh with smootherstep falloff that stays active in subviews.
+ * - [PlayerTheme.SIMPLE]: Pre-blurred album artwork with atmospheric scrim.
  */
 @Composable
 fun PlayerBackdrop(
@@ -73,8 +84,9 @@ fun PlayerBackdrop(
     reduceAnimation: Boolean,
     modifier: Modifier = Modifier,
     dimMore: Boolean = false,
+    seamYPx: Float = -1f,
 ) {
-    val scrim = if (dimMore) 0.44f else 0.24f
+    val scrim = if (dimMore) 0.44f else 0.20f
     when (theme) {
         PlayerTheme.DEFAULT -> {
             ArtworkMeshBackdrop(
@@ -82,6 +94,8 @@ fun PlayerBackdrop(
                 fallbackColors = meshColors,
                 reduceAnimation = reduceAnimation,
                 scrimAlpha = scrim,
+                dimMore = dimMore,
+                seamYPx = seamYPx,
                 modifier = modifier,
             )
         }
@@ -90,19 +104,61 @@ fun PlayerBackdrop(
                 colors = meshColors,
                 driftKey = imageUrl ?: "default",
                 reduceAnimation = reduceAnimation,
-                scrimAlpha = scrim,
+                scrimAlpha = if (dimMore) 0.46f else 0.24f,
                 modifier = modifier,
             )
         }
         PlayerTheme.SIMPLE -> {
-            SimpleBlurredBackdrop(
+            FullArtworkBlurBackdrop(
                 imageUrl = imageUrl,
                 fallbackColors = meshColors,
-                scrimAlpha = if (dimMore) 0.54f else 0.36f,
+                reduceAnimation = reduceAnimation,
+                strongScrim = dimMore,
                 modifier = modifier,
             )
         }
     }
+}
+
+/**
+ * Samples WCAG relative luminance (`0f..1f`) across the top 10% band of the cover image so the
+ * Now Playing status-bar scrim adapts cleanly to bright white covers vs dark covers.
+ */
+@Composable
+fun rememberArtworkTopBandLuminance(imageUrl: String?): Float {
+    val context = LocalPlatformContext.current
+    var luminance by remember(imageUrl) {
+        mutableFloatStateOf(imageUrl?.let { topBandLuminanceCache[it] } ?: 0.25f)
+    }
+
+    LaunchedEffect(imageUrl) {
+        if (imageUrl.isNullOrBlank()) {
+            luminance = 0.25f
+            return@LaunchedEffect
+        }
+        topBandLuminanceCache[imageUrl]?.let {
+            luminance = it
+            return@LaunchedEffect
+        }
+        val measured = withContext(Dispatchers.IO) {
+            runCatching {
+                val req = ImageRequest.Builder(context)
+                    .data(upsizeArtworkUrl(imageUrl, 96))
+                    .size(48)
+                    .allowHardware(false)
+                    .build()
+                val res = SingletonImageLoader.get(context).execute(req)
+                val bmp = (res as? SuccessResult)?.image?.toBitmap() ?: return@runCatching null
+                computeTopBandRelativeLuminance(bmp)
+            }.getOrNull()
+        }
+        if (measured != null) {
+            if (topBandLuminanceCache.size > 64) topBandLuminanceCache.clear()
+            topBandLuminanceCache[imageUrl] = measured
+            luminance = measured
+        }
+    }
+    return luminance
 }
 
 @Composable
@@ -111,6 +167,8 @@ private fun ArtworkMeshBackdrop(
     fallbackColors: List<Color>,
     reduceAnimation: Boolean,
     scrimAlpha: Float,
+    dimMore: Boolean,
+    seamYPx: Float,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalPlatformContext.current
@@ -133,7 +191,7 @@ private fun ArtworkMeshBackdrop(
                     .build()
                 val res = SingletonImageLoader.get(context).execute(req)
                 val bmp = (res as? SuccessResult)?.image?.toBitmap() ?: return@runCatching null
-                buildArtworkMeshTexture(bmp).asImageBitmap()
+                buildArtworkMeshTexture(bmp, seedKey = imageUrl).asImageBitmap()
             }.getOrNull()
         }
         if (built != null) {
@@ -143,24 +201,53 @@ private fun ArtworkMeshBackdrop(
         }
     }
 
+    val blurOverlayAlpha by animateFloatAsState(
+        targetValue = if (dimMore) 1f else 0f,
+        animationSpec = tween(durationMillis = if (reduceAnimation) 0 else 360, easing = FastOutSlowInEasing),
+        label = "backdrop_subview_xfade",
+    )
+
     Box(modifier = modifier.fillMaxSize().background(Color(0xFF0A0A0D))) {
         Crossfade(
             targetState = texture,
-            animationSpec = tween(durationMillis = if (reduceAnimation) 0 else 720),
+            animationSpec = tween(durationMillis = if (reduceAnimation) 0 else 640),
             label = "artwork_mesh_xfade",
         ) { img ->
             if (img != null) {
-                Image(
-                    bitmap = img,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            scaleX = 1.12f
-                            scaleY = 1.12f
-                        },
-                )
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val dstW = size.width.roundToInt().coerceAtLeast(1)
+                    val dstH = size.height.roundToInt().coerceAtLeast(1)
+                    val seam = seamYPx.roundToInt()
+                    if (seam in 1 until dstH) {
+                        // Extend row 0 (bottom-edge cover colors) above the seam so the cover's
+                        // translucent 42% fade dissolves seamlessly into identical hues.
+                        drawImage(
+                            image = img,
+                            srcOffset = IntOffset.Zero,
+                            srcSize = IntSize(img.width, 1),
+                            dstOffset = IntOffset.Zero,
+                            dstSize = IntSize(dstW, seam + 2),
+                            filterQuality = FilterQuality.Medium,
+                        )
+                        drawImage(
+                            image = img,
+                            srcOffset = IntOffset.Zero,
+                            srcSize = IntSize(img.width, img.height),
+                            dstOffset = IntOffset(0, seam),
+                            dstSize = IntSize(dstW, (dstH - seam).coerceAtLeast(1)),
+                            filterQuality = FilterQuality.Medium,
+                        )
+                    } else {
+                        drawImage(
+                            image = img,
+                            srcOffset = IntOffset.Zero,
+                            srcSize = IntSize(img.width, img.height),
+                            dstOffset = IntOffset.Zero,
+                            dstSize = IntSize(dstW, dstH),
+                            filterQuality = FilterQuality.Medium,
+                        )
+                    }
+                }
             } else {
                 MeshGradientBackground(
                     colors = fallbackColors,
@@ -174,45 +261,96 @@ private fun ArtworkMeshBackdrop(
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        0f to Color.Black.copy(alpha = scrimAlpha * 0.65f),
-                        0.45f to Color.Black.copy(alpha = scrimAlpha),
-                        1f to Color.Black.copy(alpha = (scrimAlpha * 1.65f).coerceAtMost(0.72f)),
+                        0f to Color.Black.copy(alpha = scrimAlpha * 0.45f),
+                        0.50f to Color.Black.copy(alpha = scrimAlpha * 0.90f),
+                        1f to Color.Black.copy(alpha = (scrimAlpha * 1.65f).coerceAtMost(0.68f)),
                     ),
                 ),
         )
+
+        if (blurOverlayAlpha > 0.005f) {
+            FullArtworkBlurBackdrop(
+                imageUrl = imageUrl,
+                fallbackColors = fallbackColors,
+                reduceAnimation = reduceAnimation,
+                strongScrim = true,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { alpha = blurOverlayAlpha },
+            )
+        }
     }
 }
 
 @Composable
-private fun SimpleBlurredBackdrop(
+private fun FullArtworkBlurBackdrop(
     imageUrl: String?,
     fallbackColors: List<Color>,
-    scrimAlpha: Float,
+    reduceAnimation: Boolean,
+    strongScrim: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val blurred = rememberBlurredArtwork(imageUrl, radius = 6)
-    Box(modifier = modifier.fillMaxSize().background(fallbackColors.firstOrNull() ?: Color.Black)) {
-        if (blurred != null) {
-            Image(
-                bitmap = blurred,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        scaleX = 1.18f
-                        scaleY = 1.18f
-                    },
-            )
+    val context = LocalPlatformContext.current
+    var blurred by remember(imageUrl) {
+        mutableStateOf(imageUrl?.let { fullBlurBackdropCache[it] })
+    }
+
+    LaunchedEffect(imageUrl) {
+        if (imageUrl.isNullOrBlank()) return@LaunchedEffect
+        fullBlurBackdropCache[imageUrl]?.let {
+            blurred = it
+            return@LaunchedEffect
         }
+        val built = withContext(Dispatchers.IO) {
+            runCatching {
+                val req = ImageRequest.Builder(context)
+                    .data(upsizeArtworkUrl(imageUrl, 256))
+                    .size(128)
+                    .allowHardware(false)
+                    .build()
+                val res = SingletonImageLoader.get(context).execute(req)
+                val bmp = (res as? SuccessResult)?.image?.toBitmap() ?: return@runCatching null
+                buildFullBlurBackdrop(bmp).asImageBitmap()
+            }.getOrNull()
+        }
+        if (built != null) {
+            if (fullBlurBackdropCache.size > 32) fullBlurBackdropCache.clear()
+            fullBlurBackdropCache[imageUrl] = built
+            blurred = built
+        }
+    }
+
+    Box(modifier = modifier.fillMaxSize().background(fallbackColors.firstOrNull() ?: Color(0xFF0A0A0D))) {
+        Crossfade(
+            targetState = blurred,
+            animationSpec = tween(durationMillis = if (reduceAnimation) 0 else 480),
+            label = "full_blur_backdrop_xfade",
+        ) { img ->
+            if (img != null) {
+                Image(
+                    bitmap = img,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            scaleX = 1.16f
+                            scaleY = 1.16f
+                        },
+                )
+            }
+        }
+        val topA = if (strongScrim) 0.34f else 0.24f
+        val midA = if (strongScrim) 0.48f else 0.36f
+        val botA = if (strongScrim) 0.64f else 0.54f
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        0f to Color.Black.copy(alpha = scrimAlpha * 0.7f),
-                        0.5f to Color.Black.copy(alpha = scrimAlpha),
-                        1f to Color.Black.copy(alpha = (scrimAlpha * 1.45f).coerceAtMost(0.78f)),
+                        0.00f to Color.Black.copy(alpha = topA),
+                        0.50f to Color.Black.copy(alpha = midA),
+                        1.00f to Color.Black.copy(alpha = botA),
                     ),
                 ),
         )
@@ -220,29 +358,48 @@ private fun SimpleBlurredBackdrop(
 }
 
 /**
- * Samples the cover bitmap down to a 6x6 color grid, darkens overly bright regions to preserve
- * typography legibility, upscales to 32x32, and runs a fast 3-pass separable box blur on CPU.
+ * Samples the cover bitmap down to a 6x6 color grid, flips it vertically so row 0 matches the
+ * bottom edge of the cover artwork, applies URL-seeded horizontal shift + mirror on rows 1..5 to
+ * avoid upside-down reflection artifacts, lifts saturation x1.12, upscales to 32x32, and applies
+ * a 3-pass separable CPU box blur.
  */
-private fun buildArtworkMeshTexture(source: Bitmap): Bitmap {
+private fun buildArtworkMeshTexture(source: Bitmap, seedKey: String): Bitmap {
     val grid = source.scale(6, 6)
+    val raw = IntArray(36)
+    grid.getPixels(raw, 0, 6, 0, 0, 6, 6)
+    grid.recycle()
+
+    val rearranged = IntArray(36)
+    val seed = seedKey.hashCode()
+    for (row in 0 until 6) {
+        val srcRow = 5 - row // Row 0 = bottom edge of cover art
+        val shift = if (row == 0) 0 else (((seed ushr (row * 3)) and 0x7) % 6)
+        val mirror = row > 0 && (((seed ushr (row + 17)) and 1) == 1)
+        for (col in 0 until 6) {
+            val mappedCol = if (mirror) 5 - ((col + shift) % 6) else (col + shift) % 6
+            rearranged[row * 6 + col] = raw[srcRow * 6 + mappedCol]
+        }
+    }
+
+    val hsl = FloatArray(3)
+    for (i in rearranged.indices) {
+        ColorUtils.colorToHSL(rearranged[i], hsl)
+        hsl[1] = (hsl[1] * 1.12f).coerceAtMost(1f)
+        hsl[2] = (hsl[2] * 0.84f).coerceIn(0.06f, 0.56f)
+        rearranged[i] = ColorUtils.HSLToColor(hsl)
+    }
+
+    val arrangedBmp = createBitmap(6, 6).apply {
+        setPixels(rearranged, 0, 6, 0, 0, 6, 6)
+    }
     val w = 32
     val h = 32
-    val upscaled = grid.scale(w, h)
-    grid.recycle()
+    val upscaled = arrangedBmp.scale(w, h)
+    arrangedBmp.recycle()
 
     val pixels = IntArray(w * h)
     upscaled.getPixels(pixels, 0, w, 0, 0, w, h)
     upscaled.recycle()
-
-    // Gently temper extreme luminance so white controls remain effortless to read
-    for (i in pixels.indices) {
-        val c = pixels[i]
-        val r = ((c ushr 16) and 0xFF) * 0.78f
-        val g = ((c ushr 8) and 0xFF) * 0.78f
-        val b = (c and 0xFF) * 0.78f
-        pixels[i] = (0xFF shl 24) or (r.toInt().coerceIn(0, 255) shl 16) or
-            (g.toInt().coerceIn(0, 255) shl 8) or b.toInt().coerceIn(0, 255)
-    }
 
     val tmp = IntArray(w * h)
     val radius = 4
@@ -255,6 +412,44 @@ private fun buildArtworkMeshTexture(source: Bitmap): Bitmap {
         setPixels(pixels, 0, w, 0, 0, w, h)
     }
 }
+
+private fun buildFullBlurBackdrop(source: Bitmap): Bitmap {
+    val size = 128
+    val scaled = source.scale(size, size)
+    val pixels = IntArray(size * size)
+    scaled.getPixels(pixels, 0, size, 0, 0, size, size)
+    scaled.recycle()
+
+    val tmp = IntArray(size * size)
+    val radius = 10
+    repeat(3) {
+        boxBlurHorizontal(pixels, tmp, size, size, radius)
+        boxBlurVertical(tmp, pixels, size, size, radius)
+    }
+
+    return createBitmap(size, size).apply {
+        setPixels(pixels, 0, size, 0, 0, size, size)
+    }
+}
+
+private fun computeTopBandRelativeLuminance(bitmap: Bitmap): Float {
+    val w = bitmap.width.coerceAtLeast(1)
+    val h = bitmap.height.coerceAtLeast(1)
+    val bandRows = (h * 0.12f).roundToInt().coerceIn(1, h)
+    val pixels = IntArray(w * bandRows)
+    bitmap.getPixels(pixels, 0, w, 0, 0, w, bandRows)
+    var sum = 0.0
+    for (p in pixels) {
+        val r = linearizeChannel(((p ushr 16) and 0xFF) / 255.0)
+        val g = linearizeChannel(((p ushr 8) and 0xFF) / 255.0)
+        val b = linearizeChannel((p and 0xFF) / 255.0)
+        sum += 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+    return (sum / pixels.size.coerceAtLeast(1)).toFloat().coerceIn(0f, 1f)
+}
+
+private fun linearizeChannel(c: Double): Double =
+    if (c <= 0.03928) c / 12.92 else ((c + 0.055) / 1.055).pow(2.4)
 
 private fun boxBlurHorizontal(src: IntArray, dst: IntArray, w: Int, h: Int, r: Int) {
     for (y in 0 until h) {

@@ -1,7 +1,10 @@
 package com.music.musica.playback
 
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
@@ -85,6 +88,9 @@ data class PlayerUiState(
     val audioSessionId: Int = 0,
     val nerdStats: NerdStats = NerdStats(),
     val errorMessage: String? = null,
+    val playbackSourceLabel: String? = null,
+    val playbackSourceBrowseId: String? = null,
+    val preferredAudioDeviceId: Int? = null,
 )
 
 /**
@@ -137,6 +143,11 @@ class MusicaPlaybackService : MediaSessionService() {
 
     // Tracks the sleepAfterTrack value already applied to ExoPlayer's timeline
     private var appliedSleepAfterTrack: Boolean = false
+
+    // Origin metadata ("Playing from ...") and preferred ExoPlayer audio output device
+    private var currentSourceLabel: String? = null
+    private var currentSourceBrowseId: String? = null
+    private var preferredAudioDeviceId: Int? = null
 
     // Tracks the last videoId whose stream resolution threw so onPlayerError does not blame currentSong
     @Volatile
@@ -282,7 +293,13 @@ class MusicaPlaybackService : MediaSessionService() {
                 val payload = MusicaSessionCommands.takeQueuePayload(
                     args.getString(MusicaSessionCommands.ARG_HANDOFF_ID),
                 ) ?: return
-                playQueue(payload.songs, payload.startIndex, payload.shuffled)
+                playQueue(
+                    songs = payload.songs,
+                    startIndex = payload.startIndex,
+                    shuffled = payload.shuffled,
+                    sourceLabel = payload.sourceLabel,
+                    sourceBrowseId = payload.sourceBrowseId,
+                )
             }
 
             MusicaSessionCommands.CMD_SELECT_INDEX -> {
@@ -354,12 +371,23 @@ class MusicaPlaybackService : MediaSessionService() {
                 val afterTrack = args.getBoolean(MusicaSessionCommands.ARG_AFTER_TRACK, false)
                 updateSleepTimerUi(rem, afterTrack)
             }
+
+            MusicaSessionCommands.CMD_SET_PREFERRED_AUDIO_DEVICE -> {
+                val rawId = args.getInt(MusicaSessionCommands.ARG_DEVICE_ID, -1)
+                setPreferredAudioDevice(if (rawId < 0) null else rawId)
+            }
         }
     }
 
     // ---- Playback API ----
 
-    fun playQueue(songs: List<Song>, startIndex: Int = 0, shuffled: Boolean? = null) {
+    fun playQueue(
+        songs: List<Song>,
+        startIndex: Int = 0,
+        shuffled: Boolean? = null,
+        sourceLabel: String? = null,
+        sourceBrowseId: String? = null,
+    ) {
         if (songs.isEmpty()) return
         recordCompletedListeningSession()
         cancelCrossfade()
@@ -367,12 +395,29 @@ class MusicaPlaybackService : MediaSessionService() {
         retryJob?.cancel()
         pendingResumePositionMs = 0L
         consecutiveAutoSkips = 0
+        currentSourceLabel = sourceLabel?.takeIf { it.isNotBlank() }
+        currentSourceBrowseId = sourceBrowseId?.takeIf { it.isNotBlank() }
         container.autoplayController.reset()
         queueManager.setQueue(songs, startIndex, shuffled)
         loadCurrentFromQueue(autoPlay = true)
         syncUiState()
         maybeFetchAutoplay()
         scheduleSaveLastPlayed(immediate = true)
+    }
+
+    fun setPreferredAudioDevice(deviceId: Int?) {
+        val am = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        val target: AudioDeviceInfo? = if (deviceId != null && am != null) {
+            runCatching {
+                am.getDevices(AudioManager.GET_DEVICES_OUTPUTS).firstOrNull { it.id == deviceId }
+            }.getOrNull()
+        } else {
+            null
+        }
+        preferredAudioDeviceId = target?.id
+        runCatching { activePlayer.setPreferredAudioDevice(target) }
+        runCatching { standbyPlayer?.setPreferredAudioDevice(target) }
+        syncUiState()
     }
 
     fun selectQueueIndex(index: Int) {
@@ -1326,6 +1371,7 @@ class MusicaPlaybackService : MediaSessionService() {
         activePlayer = incoming
         standbyPlayer = outgoing
         mediaSession?.player = createSessionForwardingPlayer(activePlayer)
+        preferredAudioDeviceId?.let { devId -> setPreferredAudioDevice(devId) }
 
         queueManager.selectIndex(nextIdx)
         accumulatedPlayMs = 0L
@@ -1547,6 +1593,9 @@ class MusicaPlaybackService : MediaSessionService() {
                 shuffleEnabled = queueManager.shuffleEnabled,
                 repeatMode = queueManager.repeatMode,
                 audioSessionId = activePlayer.audioSessionId.takeIf { id -> id != C.AUDIO_SESSION_ID_UNSET } ?: 0,
+                playbackSourceLabel = currentSourceLabel,
+                playbackSourceBrowseId = currentSourceBrowseId,
+                preferredAudioDeviceId = preferredAudioDeviceId,
             )
         }
     }

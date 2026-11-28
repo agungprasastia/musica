@@ -90,9 +90,21 @@ class PlayerController(
 
     private fun hasLoadedQueue(): Boolean = state.value.currentSong != null
 
-    fun playQueue(songs: List<Song>, startIndex: Int = 0, shuffled: Boolean? = null) {
+    fun playQueue(
+        songs: List<Song>,
+        startIndex: Int = 0,
+        shuffled: Boolean? = null,
+        sourceLabel: String? = null,
+        sourceBrowseId: String? = null,
+    ) {
         if (songs.isEmpty()) return
-        val handoffId = MusicaSessionCommands.putQueuePayload(songs, startIndex, shuffled)
+        val handoffId = MusicaSessionCommands.putQueuePayload(
+            songs = songs,
+            startIndex = startIndex,
+            shuffled = shuffled,
+            sourceLabel = sourceLabel,
+            sourceBrowseId = sourceBrowseId,
+        )
         dispatchCommand(
             action = MusicaSessionCommands.CMD_PLAY_QUEUE,
             args = Bundle().apply { putString(MusicaSessionCommands.ARG_HANDOFF_ID, handoffId) },
@@ -100,7 +112,23 @@ class PlayerController(
         )
     }
 
-    fun playSong(song: Song) = playQueue(listOf(song), 0, shuffled = null)
+    fun playSong(
+        song: Song,
+        sourceLabel: String? = null,
+        sourceBrowseId: String? = null,
+    ) = playQueue(
+        songs = listOf(song),
+        startIndex = 0,
+        shuffled = null,
+        sourceLabel = sourceLabel,
+        sourceBrowseId = sourceBrowseId,
+    )
+
+    fun setPreferredAudioDevice(deviceId: Int?) = dispatchCommand(
+        action = MusicaSessionCommands.CMD_SET_PREFERRED_AUDIO_DEVICE,
+        args = Bundle().apply { putInt(MusicaSessionCommands.ARG_DEVICE_ID, deviceId ?: -1) },
+        connectIfNeeded = hasLoadedQueue(),
+    )
 
     fun selectQueueIndex(index: Int) = dispatchCommand(
         action = MusicaSessionCommands.CMD_SELECT_INDEX,
